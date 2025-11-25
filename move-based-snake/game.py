@@ -58,6 +58,7 @@ class MoveBasedSnakeGame:
         self.snake: Optional[Snake] = None
         self.monsters: List[Monster] = []
         self.walls: Set[Tuple[int, int]] = set()
+        self.wall_animations: Dict[Tuple[int, int], int] = {}  # Track wall animations: {pos: frame}
         self.steps = 0
         self.done = False
         self.score = 0
@@ -76,6 +77,7 @@ class MoveBasedSnakeGame:
         self.done = False
         self.score = 0
         self.walls = set()
+        self.wall_animations = {}
         
         # Initialize snake in center
         start_pos = (self.grid_width // 2, self.grid_height // 2)
@@ -85,10 +87,19 @@ class MoveBasedSnakeGame:
         self.monsters = []
         occupied = self.snake.get_all_positions()
         
-        for _ in range(self.num_monsters):
+        # Available monster types
+        monster_types = [
+            "Blinded Grimlock", "Bloodshot Eye", "Brawny Ogre", "Crimson Slaad",
+            "Crushing Cyclops", "Death Slime", "Fungal Myconid", "Humongous Ettin",
+            "Murky Slaad", "Ochre Jelly", "Ocular Watcher", "Red Cap",
+            "Shrieker Mushroom", "Stone Troll", "Swamp Troll"
+        ]
+        
+        for i in range(self.num_monsters):
             pos = self._get_random_empty_position(occupied)
             if pos is not None:
-                monster = Monster(pos, self.monster_avoidance_prob)
+                monster_type = monster_types[i % len(monster_types)]  # Cycle through types
+                monster = Monster(pos, self.monster_avoidance_prob, monster_type)
                 self.monsters.append(monster)
                 occupied.add(pos)
         
@@ -118,6 +129,9 @@ class MoveBasedSnakeGame:
         if action == 4:  # DETACH_TAIL
             wall_pos = self.snake.detach_tail()
             if wall_pos is not None:
+                # Start wall animation (frame 0 of 9)
+                self.wall_animations[wall_pos] = 0
+                # Walls are added immediately but animation plays
                 self.walls.add(wall_pos)
                 reward = 0.1  # Small reward for strategic wall placement
             else:
@@ -155,6 +169,15 @@ class MoveBasedSnakeGame:
         # Execute all moves
         for monster, direction in monster_moves:
             monster.move(direction)
+        
+        # Update wall animations
+        completed_animations = []
+        for wall_pos in list(self.wall_animations.keys()):
+            self.wall_animations[wall_pos] += 1
+            if self.wall_animations[wall_pos] >= 9:  # Animation complete (9 frames)
+                completed_animations.append(wall_pos)
+        for wall_pos in completed_animations:
+            del self.wall_animations[wall_pos]
         
         # Small survival reward
         reward += 0.01
@@ -214,6 +237,7 @@ class MoveBasedSnakeGame:
             'snake': self.snake,
             'monsters': self.monsters,
             'walls': self.walls,
+            'wall_animations': self.wall_animations,
             'grid_width': self.grid_width,
             'grid_height': self.grid_height,
             'steps': self.steps,

@@ -12,16 +12,19 @@ class Monster:
     LEFT = (-1, 0)
     DIRECTIONS = [UP, RIGHT, DOWN, LEFT]
     
-    def __init__(self, pos: Tuple[int, int], avoidance_prob: float = 0.8):
+    def __init__(self, pos: Tuple[int, int], avoidance_prob: float = 0.8,
+                 monster_type: str = None):
         """
         Initialize a monster.
         
         Args:
             pos: Initial position
             avoidance_prob: Probability of using avoidance behavior vs random (default 0.8)
+            monster_type: Type/name of the monster (for sprite loading)
         """
         self.pos = pos
         self.avoidance_prob = avoidance_prob
+        self.monster_type = monster_type
     
     def get_position(self) -> Tuple[int, int]:
         """Get the monster's current position."""
