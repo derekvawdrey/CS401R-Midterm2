@@ -10,11 +10,11 @@ import numpy as np
 try:
     from .snake import Snake
     from .monsters.base_monster import Monster
-    from .rewards import COLLISION_REWARD, EAT_MONSTER_REWARD, SURVIVAL_REWARD
+    from .training_options import COLLISION_REWARD, EAT_MONSTER_REWARD, SURVIVAL_REWARD, ENABLE_DANGER_SIGNALS
 except ImportError:
     from snake import Snake
     from monsters.base_monster import Monster
-    from rewards import COLLISION_REWARD, EAT_MONSTER_REWARD, SURVIVAL_REWARD
+    from training_options import COLLISION_REWARD, EAT_MONSTER_REWARD, SURVIVAL_REWARD, ENABLE_DANGER_SIGNALS
 
 class MoveBasedSnakeGame:
     """
@@ -36,7 +36,8 @@ class MoveBasedSnakeGame:
     
     def __init__(self, grid_width: int = 20, grid_height: int = 20,
                  num_monsters: int = 3, snake_start_length: int = 3,
-                 monster_avoidance_prob: float = 0.8):
+                 monster_avoidance_prob: float = 0.8, monsters_move: bool = True,
+                 enable_danger_signals: bool = None):
         """
         Initialize the game.
         
@@ -46,12 +47,17 @@ class MoveBasedSnakeGame:
             num_monsters: Number of monsters in the game
             snake_start_length: Initial length of the snake
             monster_avoidance_prob: Probability monsters use avoidance behavior
+            monsters_move: Whether monsters should move each step (default: True)
+            enable_danger_signals: Whether to include danger signals in observation.
+                                  If None, uses ENABLE_DANGER_SIGNALS from training_options
         """
         self.grid_width = grid_width
         self.grid_height = grid_height
         self.num_monsters = num_monsters
         self.snake_start_length = snake_start_length
         self.monster_avoidance_prob = monster_avoidance_prob
+        self.monsters_move = monsters_move
+        self.enable_danger_signals = enable_danger_signals if enable_danger_signals is not None else ENABLE_DANGER_SIGNALS
         
         self.snake: Optional[Snake] = None
         self.monsters: List[Monster] = []
@@ -60,7 +66,7 @@ class MoveBasedSnakeGame:
         self.score = 0
         
         # Action space size
-        self.action_space_size = 6
+        self.action_space_size = 4
         
     def reset(self) -> np.ndarray:
         """
@@ -179,62 +185,63 @@ class MoveBasedSnakeGame:
                 info['monsters_eaten'] = len(eaten_monsters)
         
         # Move monsters (they all move simultaneously based on current state)
-        snake_head = self.snake.get_head()
-        snake_body = self.snake.get_all_positions()
-        monster_positions = {m.get_position() for m in self.monsters}
-        
-        # Calculate all monster moves first
-        monster_moves = []
-        for monster in self.monsters:
-            direction = monster.choose_direction(
-                snake_head, snake_body, monster_positions,
-                self.grid_width, self.grid_height
-            )
-            monster_moves.append((monster, direction))
-        
-        # Execute moves, preventing collisions between monsters
-        # Track which positions will be occupied after all moves
-        occupied_positions = set()  # Positions that will be occupied after moves
-        
-        # First pass: calculate all planned positions
-        planned_positions = {}
-        for monster, direction in monster_moves:
-            if direction is not None:
-                new_pos = (monster.pos[0] + direction[0], monster.pos[1] + direction[1])
-                if new_pos not in planned_positions:
-                    planned_positions[new_pos] = []
-                planned_positions[new_pos].append(monster)
-            else:
-                # Monster staying in place
-                if monster.pos not in planned_positions:
-                    planned_positions[monster.pos] = []
-                planned_positions[monster.pos].append(monster)
-        
-        # Second pass: execute moves, preventing collisions
-        for monster, direction in monster_moves:
-            if direction is not None:
-                new_pos = (monster.pos[0] + direction[0], monster.pos[1] + direction[1])
-                
-                # Check if this position is already occupied or will be by another monster
-                if new_pos in occupied_positions:
-                    # Position already taken, monster stays in place
-                    occupied_positions.add(monster.pos)  # Current position stays occupied
-                    continue
-                
-                # Check if multiple monsters want this position
-                if new_pos in planned_positions and len(planned_positions[new_pos]) > 1:
-                    # Multiple monsters want same position - only first one in list moves
-                    if planned_positions[new_pos][0] != monster:
-                        # Not first monster, stay in place
-                        occupied_positions.add(monster.pos)
+        if self.monsters_move:
+            snake_head = self.snake.get_head()
+            snake_body = self.snake.get_all_positions()
+            monster_positions = {m.get_position() for m in self.monsters}
+            
+            # Calculate all monster moves first
+            monster_moves = []
+            for monster in self.monsters:
+                direction = monster.choose_direction(
+                    snake_head, snake_body, monster_positions,
+                    self.grid_width, self.grid_height
+                )
+                monster_moves.append((monster, direction))
+            
+            # Execute moves, preventing collisions between monsters
+            # Track which positions will be occupied after all moves
+            occupied_positions = set()  # Positions that will be occupied after moves
+            
+            # First pass: calculate all planned positions
+            planned_positions = {}
+            for monster, direction in monster_moves:
+                if direction is not None:
+                    new_pos = (monster.pos[0] + direction[0], monster.pos[1] + direction[1])
+                    if new_pos not in planned_positions:
+                        planned_positions[new_pos] = []
+                    planned_positions[new_pos].append(monster)
+                else:
+                    # Monster staying in place
+                    if monster.pos not in planned_positions:
+                        planned_positions[monster.pos] = []
+                    planned_positions[monster.pos].append(monster)
+            
+            # Second pass: execute moves, preventing collisions
+            for monster, direction in monster_moves:
+                if direction is not None:
+                    new_pos = (monster.pos[0] + direction[0], monster.pos[1] + direction[1])
+                    
+                    # Check if this position is already occupied or will be by another monster
+                    if new_pos in occupied_positions:
+                        # Position already taken, monster stays in place
+                        occupied_positions.add(monster.pos)  # Current position stays occupied
                         continue
-                
-                # Safe to move
-                occupied_positions.add(new_pos)
-                monster.move(direction)
-            else:
-                # Monster staying in place
-                occupied_positions.add(monster.pos)
+                    
+                    # Check if multiple monsters want this position
+                    if new_pos in planned_positions and len(planned_positions[new_pos]) > 1:
+                        # Multiple monsters want same position - only first one in list moves
+                        if planned_positions[new_pos][0] != monster:
+                            # Not first monster, stay in place
+                            occupied_positions.add(monster.pos)
+                            continue
+                    
+                    # Safe to move
+                    occupied_positions.add(new_pos)
+                    monster.move(direction)
+                else:
+                    # Monster staying in place
+                    occupied_positions.add(monster.pos)
         
         # Small survival reward
         reward += SURVIVAL_REWARD
@@ -242,6 +249,56 @@ class MoveBasedSnakeGame:
         info['snake_length'] = len(self.snake.body) if self.snake else 0
         
         return self._get_observation(), reward, self.done, info
+    
+    def _get_relative_directions(self, current_dir: Tuple[int, int]) -> Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]:
+        """
+        Get left, forward, and right directions relative to the snake's current direction.
+        
+        Args:
+            current_dir: Current direction of the snake
+            
+        Returns:
+            Tuple of (left_dir, forward_dir, right_dir)
+        """
+        # Forward is the current direction
+        forward = current_dir
+        
+        # Calculate left and right by rotating the direction vector
+        # For (x, y): left = (y, -x), right = (-y, x)
+        left = (current_dir[1], -current_dir[0])
+        right = (-current_dir[1], current_dir[0])
+        
+        return left, forward, right
+    
+    def _check_danger_at_position(self, pos: Tuple[int, int], exclude_tail: bool = False) -> bool:
+        """
+        Check if a position is dangerous (contains snake body).
+        Since the snake wraps around boundaries, we wrap the position first.
+        
+        Args:
+            pos: Position to check
+            exclude_tail: If True, exclude the tail from danger check (for forward movement)
+            
+        Returns:
+            True if position is dangerous, False otherwise
+        """
+        # Wrap position (snake wraps around boundaries)
+        wrapped_pos = (pos[0] % self.grid_width, pos[1] % self.grid_height)
+        
+        # Check if position contains snake body
+        if self.snake is not None:
+            if exclude_tail and len(self.snake.body) > 1:
+                # Exclude tail since it will move when snake moves forward
+                body_without_tail = set(self.snake.body[:-1])
+                if wrapped_pos in body_without_tail:
+                    return True
+            else:
+                # Check all body positions
+                snake_body = self.snake.get_all_positions()
+                if wrapped_pos in snake_body:
+                    return True
+        
+        return False
     
     def _get_observation(self) -> np.ndarray:
         """
@@ -269,7 +326,33 @@ class MoveBasedSnakeGame:
             if 0 <= pos[0] < self.grid_width and 0 <= pos[1] < self.grid_height:
                 grid[pos[1], pos[0]] = -1.0
         
-        return grid.flatten()
+        grid_flat = grid.flatten()
+        
+        # Get danger signals (left, forward, right) if enabled
+        if self.enable_danger_signals:
+            danger_signals = np.zeros(3, dtype=np.float32)
+            if self.snake is not None:
+                head_pos = self.snake.get_head()
+                current_dir = self.snake.direction
+                
+                # Get relative directions
+                left_dir, forward_dir, right_dir = self._get_relative_directions(current_dir)
+                
+                # Check danger in each direction
+                left_pos = (head_pos[0] + left_dir[0], head_pos[1] + left_dir[1])
+                forward_pos = (head_pos[0] + forward_dir[0], head_pos[1] + forward_dir[1])
+                right_pos = (head_pos[0] + right_dir[0], head_pos[1] + right_dir[1])
+                
+                # For forward, exclude tail since it will move; for left/right, check all body
+                danger_signals[0] = 1.0 if self._check_danger_at_position(left_pos, exclude_tail=False) else 0.0
+                danger_signals[1] = 1.0 if self._check_danger_at_position(forward_pos, exclude_tail=True) else 0.0
+                danger_signals[2] = 1.0 if self._check_danger_at_position(right_pos, exclude_tail=False) else 0.0
+            
+            # Concatenate grid with danger signals
+            return np.concatenate([grid_flat, danger_signals])
+        else:
+            # Return just the grid without danger signals
+            return grid_flat
     
     def _get_random_empty_position(self, occupied: Set[Tuple[int, int]], 
                                    max_attempts: int = 100) -> Optional[Tuple[int, int]]:

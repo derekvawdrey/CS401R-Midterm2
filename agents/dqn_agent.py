@@ -8,10 +8,10 @@ import os
 
 try:
     from .base_agent import BaseAgent
-    from .dqn_model import DQNAgent
+    from .models.dqn_model import DQNAgent
 except ImportError:
     from base_agent import BaseAgent
-    from dqn_model import DQNAgent
+    from models.dqn_model import DQNAgent
 
 
 class SnakeDQNAgent(BaseAgent):

@@ -55,14 +55,29 @@ def main():
                        help='Replay buffer size (default: 10000)')
     parser.add_argument('--max-steps', type=int, default=1000,
                        help='Maximum steps per episode (default: 1000)')
+    parser.add_argument('--no-monster-movement', action='store_true',
+                       help='Disable monster movement (monsters stay in place)')
+    parser.add_argument('--no-danger-signals', action='store_true',
+                       help='Disable danger signals in observation')
+    parser.add_argument('--enable-danger-signals', action='store_true',
+                       help='Enable danger signals in observation (overrides training_options.py)')
     
     args = parser.parse_args()
+    
+    # Determine danger signals setting (command line overrides config file)
+    enable_danger = None
+    if args.enable_danger_signals:
+        enable_danger = True
+    elif args.no_danger_signals:
+        enable_danger = False
     
     # Create game
     game = MoveBasedSnakeGame(
         grid_width=args.width,
         grid_height=args.height,
-        num_monsters=args.monsters
+        num_monsters=args.monsters,
+        monsters_move=not args.no_monster_movement,
+        enable_danger_signals=enable_danger
     )
     
     # Create renderer if needed

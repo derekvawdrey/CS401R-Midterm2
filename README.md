@@ -142,7 +142,7 @@ train_any_agent(
 
 ### Game Details
 
-The game supports 6 actions:
+The game supports 4 actions:
 - `0`: UP
 - `1`: RIGHT
 - `2`: DOWN
