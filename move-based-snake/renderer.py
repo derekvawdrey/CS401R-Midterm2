@@ -32,11 +32,19 @@ class GameRenderer:
         self.window_width = grid_width * cell_size
         self.window_height = grid_height * cell_size
         
-        # Initialize pygame
+        # Initialize pygame and mixer for sound
         pygame.init()
+        pygame.mixer.init()
         self.screen = pygame.display.set_mode((self.window_width, self.window_height))
         pygame.display.set_caption("Move-Based Snake Game")
         self.clock = pygame.time.Clock()
+        
+        # Sound effects
+        self.sound_wall = None
+        self.sound_eating = None
+        self.sound_game_over = None
+        self.sound_background = None
+        self.background_playing = False
         
         # Colors
         self.BACKGROUND = (20, 20, 20)
@@ -51,6 +59,12 @@ class GameRenderer:
         self.last_animation_time = time.time()
         self.animation_speed = 0.15  # Seconds per frame
         
+        # State tracking for sound effects
+        self.prev_walls = set()
+        self.prev_wall_animations = {}  # Track wall animations to detect new ones
+        self.prev_monster_count = 0
+        self.prev_done = False
+        
         # Load assets if available
         self.assets_path = Path(__file__).parent / "assets"
         self.snake_head_img = None
@@ -61,6 +75,7 @@ class GameRenderer:
         self.monster_sprites: Dict[str, List[pygame.Surface]] = {}
         
         self._load_assets()
+        self._load_sounds()
     
     def _load_assets(self):
         """Load image assets if they exist."""
@@ -157,6 +172,108 @@ class GameRenderer:
             print(f"Warning: Could not load some assets: {e}")
             print("Using colored rectangles instead.")
     
+    def _load_sounds(self):
+        """Load sound effects and background music."""
+        try:
+            music_path = self.assets_path / "music"
+            
+            # Load sound effects
+            if (music_path / "wall.mp3").exists():
+                self.sound_wall = pygame.mixer.Sound(str(music_path / "wall.mp3"))
+            if (music_path / "eating.mp3").exists():
+                self.sound_eating = pygame.mixer.Sound(str(music_path / "eating.mp3"))
+            if (music_path / "game-over.mp3").exists():
+                self.sound_game_over = pygame.mixer.Sound(str(music_path / "game-over.mp3"))
+            if (music_path / "background.mp3").exists():
+                self.sound_background = str(music_path / "background.mp3")
+                # Start background music (looping)
+                try:
+                    pygame.mixer.music.load(self.sound_background)
+                    pygame.mixer.music.set_volume(0.5)  # Set volume to 50%
+                    pygame.mixer.music.play(-1)  # -1 means loop indefinitely
+                    self.background_playing = True
+                except Exception as e:
+                    print(f"Warning: Could not play background music: {e}")
+            
+        except Exception as e:
+            print(f"Warning: Could not load some sound files: {e}")
+    
+    def play_sound_wall(self):
+        """Play the wall creation sound effect."""
+        if self.sound_wall:
+            try:
+                self.sound_wall.play()
+            except Exception:
+                pass  # Silently fail if sound can't play
+    
+    def play_sound_eating(self):
+        """Play the eating sound effect."""
+        if self.sound_eating:
+            try:
+                self.sound_eating.play()
+            except Exception:
+                pass
+    
+    def play_sound_game_over(self):
+        """Play the game over sound effect."""
+        if self.sound_game_over:
+            try:
+                # Stop background music
+                pygame.mixer.music.stop()
+                self.background_playing = False
+                self.sound_game_over.play()
+            except Exception:
+                pass
+    
+    def _check_and_play_sounds(self, state_dict: Dict[str, Any]):
+        """Check game state for events and play appropriate sounds."""
+        walls = state_dict.get('walls', set())
+        monsters = state_dict.get('monsters', [])
+        done = state_dict.get('done', False)
+        wall_animations = state_dict.get('wall_animations', {})
+        
+        # Check for new wall creation (wall animation starting)
+        # A new wall animation starts when frame_idx is 0 and wasn't in prev animations
+        for wall_pos, frame_idx in wall_animations.items():
+            if frame_idx == 0 and wall_pos not in self.prev_wall_animations:
+                # New wall animation just started - play wall sound
+                self.play_sound_wall()
+                break
+        
+        # Check for monsters being eaten
+        current_monster_count = len(monsters)
+        if current_monster_count < self.prev_monster_count:
+            # Monster was eaten - play eating sound
+            self.play_sound_eating()
+        
+        # Check for game over
+        if done and not self.prev_done:
+            # Game just ended - play game over sound
+            self.play_sound_game_over()
+        
+        # Update previous state
+        self.prev_walls = walls.copy()
+        self.prev_wall_animations = wall_animations.copy()
+        self.prev_monster_count = current_monster_count
+        self.prev_done = done
+    
+    def reset_state_tracking(self):
+        """Reset state tracking (call when game resets)."""
+        self.prev_walls = set()
+        self.prev_wall_animations = {}
+        self.prev_monster_count = 0
+        self.prev_done = False
+        
+        # Restart background music if it stopped
+        if self.sound_background and not self.background_playing:
+            try:
+                pygame.mixer.music.load(self.sound_background)
+                pygame.mixer.music.set_volume(0.5)
+                pygame.mixer.music.play(-1)
+                self.background_playing = True
+            except Exception:
+                pass
+    
     def render(self, state_dict: Dict[str, Any]):
         """
         Render the current game state.
@@ -164,6 +281,9 @@ class GameRenderer:
         Args:
             state_dict: Dictionary containing game state
         """
+        # Check for events and play sounds
+        self._check_and_play_sounds(state_dict)
+        
         self.screen.fill(self.BACKGROUND)
         
         # Draw grid lines
@@ -265,6 +385,60 @@ class GameRenderer:
                     return 'reset'
         return None
     
+    def render_game_over(self, score: int, steps: int, snake_length: int):
+        """
+        Render a game over screen.
+        
+        Args:
+            score: Final score
+            steps: Number of steps taken
+            snake_length: Final snake length
+        """
+        # Darken the screen with a semi-transparent overlay
+        overlay = pygame.Surface((self.window_width, self.window_height))
+        overlay.set_alpha(200)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Game Over text
+        try:
+            font_large = pygame.font.Font(None, 72)
+            font_medium = pygame.font.Font(None, 36)
+            font_small = pygame.font.Font(None, 24)
+        except:
+            # Fallback if font loading fails
+            font_large = pygame.font.SysFont('Arial', 72)
+            font_medium = pygame.font.SysFont('Arial', 36)
+            font_small = pygame.font.SysFont('Arial', 24)
+        
+        # Title
+        game_over_text = font_large.render("GAME OVER", True, (255, 0, 0))
+        game_over_rect = game_over_text.get_rect(center=(self.window_width // 2, self.window_height // 2 - 80))
+        self.screen.blit(game_over_text, game_over_rect)
+        
+        # Stats
+        score_text = font_medium.render(f"Score: {score}", True, (255, 255, 255))
+        score_rect = score_text.get_rect(center=(self.window_width // 2, self.window_height // 2 - 20))
+        self.screen.blit(score_text, score_rect)
+        
+        steps_text = font_medium.render(f"Steps: {steps}", True, (255, 255, 255))
+        steps_rect = steps_text.get_rect(center=(self.window_width // 2, self.window_height // 2 + 20))
+        self.screen.blit(steps_text, steps_rect)
+        
+        snake_length_text = font_medium.render(f"Snake Length: {snake_length}", True, (255, 255, 255))
+        snake_length_rect = snake_length_text.get_rect(center=(self.window_width // 2, self.window_height // 2 + 60))
+        self.screen.blit(snake_length_text, snake_length_rect)
+        
+        # Instructions
+        restart_text = font_small.render("Press R to restart or ESC to quit", True, (200, 200, 200))
+        restart_rect = restart_text.get_rect(center=(self.window_width // 2, self.window_height // 2 + 120))
+        self.screen.blit(restart_text, restart_rect)
+        
+        pygame.display.flip()
+    
     def close(self):
         """Close the renderer and pygame."""
+        # Stop all sounds
+        pygame.mixer.music.stop()
+        pygame.mixer.quit()
         pygame.quit()

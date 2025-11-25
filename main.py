@@ -19,6 +19,7 @@ from renderer import GameRenderer
 def play_player_mode(game: MoveBasedSnakeGame, renderer: GameRenderer):
     """Run the game in player mode (keyboard controls)."""
     state = game.reset()
+    renderer.reset_state_tracking()  # Initialize state tracking
     
     print("Controls:")
     print("  Arrow Keys or WASD: Move")
@@ -27,6 +28,8 @@ def play_player_mode(game: MoveBasedSnakeGame, renderer: GameRenderer):
     print("  ESC or Close window: Quit")
     
     running = True
+    game_over = False
+    
     while running:
         action = renderer.handle_events()
         
@@ -35,29 +38,46 @@ def play_player_mode(game: MoveBasedSnakeGame, renderer: GameRenderer):
             break
         elif action == 'reset':
             state = game.reset()
+            renderer.reset_state_tracking()  # Reset sound tracking
+            game_over = False
             print("Game reset!")
             continue
-        elif action is not None:
-            # Perform action
-            state, reward, done, info = game.step(action)
-            
-            if done:
-                print(f"Game Over! Score: {info.get('score', 0)}, Steps: {info.get('steps', 0)}")
-                print("Press R to reset or close window to quit.")
-            else:
-                # Small status update every 50 steps
-                if info.get('steps', 0) % 50 == 0:
-                    print(f"Steps: {info['steps']}, Snake Length: {info['snake_length']}")
-        else:
-            # No action, just render current state
-            pass
         
-        # Render current state
-        renderer.render(game.get_state_dict())
+        if not game_over:
+            # Game is still running
+            if action is not None:
+                # Perform action
+                state, reward, done, info = game.step(action)
+                
+                if done:
+                    game_over = True
+                    # Render game over screen
+                    renderer.render_game_over(
+                        score=info.get('score', 0),
+                        steps=info.get('steps', 0),
+                        snake_length=info.get('snake_length', 0)
+                    )
+                else:
+                    # Render normal game state
+                    renderer.render(game.get_state_dict())
+                    # Small status update every 50 steps
+                    if info.get('steps', 0) % 50 == 0:
+                        print(f"Steps: {info['steps']}, Snake Length: {info['snake_length']}")
+            else:
+                # No action, render current state
+                renderer.render(game.get_state_dict())
+        else:
+            # Game is over, show game over screen
+            # Keep rendering game over screen until reset or quit
+            renderer.render_game_over(
+                score=game.score,
+                steps=game.steps,
+                snake_length=len(game.snake.body) if game.snake else 0
+            )
 
 
 def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer], 
-                    agent, max_steps: int = 1000, render: bool = True):
+                    agent, max_steps: int = 1000, render: bool = True, auto_restart: bool = True):
     """
     Run the game in agent mode.
     
@@ -67,43 +87,68 @@ def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer],
         agent: Agent that provides actions (should have a predict/act method)
         max_steps: Maximum steps per episode
         render: Whether to render the game
+        auto_restart: Whether to automatically restart when game ends
     """
-    state = game.reset()
-    total_reward = 0
-    step_count = 0
+    episode_count = 0
     
-    if render and renderer:
-        renderer.render(game.get_state_dict())
-    
-    while not game.done and step_count < max_steps:
-        # Get action from agent
-        if hasattr(agent, 'predict'):
-            action = agent.predict(state)
-        elif hasattr(agent, 'act'):
-            action = agent.act(state)
-        elif callable(agent):
-            action = agent(state)
-        else:
-            raise ValueError("Agent must have a predict(), act() method, or be callable")
+    while True:  # Loop for multiple episodes
+        state = game.reset()
+        if renderer:
+            renderer.reset_state_tracking()
         
-        # Perform action
-        state, reward, done, info = game.step(action)
-        total_reward += reward
-        step_count += 1
+        total_reward = 0
+        step_count = 0
         
-        # Render if enabled
         if render and renderer:
-            render_event = renderer.handle_events()
-            if render_event == 'quit':
-                break
             renderer.render(game.get_state_dict())
-    
-    return {
-        'total_reward': total_reward,
-        'steps': step_count,
-        'score': game.score,
-        'snake_length': len(game.snake.body) if game.snake else 0
-    }
+        
+        while not game.done and step_count < max_steps:
+            # Get action from agent
+            if hasattr(agent, 'predict'):
+                action = agent.predict(state)
+            elif hasattr(agent, 'act'):
+                action = agent.act(state)
+            elif callable(agent):
+                action = agent(state)
+            else:
+                raise ValueError("Agent must have a predict(), act() method, or be callable")
+            
+            # Perform action
+            state, reward, done, info = game.step(action)
+            total_reward += reward
+            step_count += 1
+            
+            # Render if enabled
+            if render and renderer:
+                render_event = renderer.handle_events()
+                if render_event == 'quit':
+                    return {
+                        'total_reward': total_reward,
+                        'steps': step_count,
+                        'score': game.score,
+                        'snake_length': len(game.snake.body) if game.snake else 0,
+                        'episode': episode_count
+                    }
+                renderer.render(game.get_state_dict())
+        
+        episode_count += 1
+        result = {
+            'total_reward': total_reward,
+            'steps': step_count,
+            'score': game.score,
+            'snake_length': len(game.snake.body) if game.snake else 0,
+            'episode': episode_count
+        }
+        
+        if not auto_restart:
+            return result
+        
+        # Auto-restart for next episode - continue loop
+        # Small delay before restarting if rendering
+        if render and renderer:
+            import time
+        
+        # Continue to next episode (loop will restart at the top)
 
 
 class RandomAgent:
@@ -176,21 +221,30 @@ def main():
                 print(f"Error loading agent: {e}. Using random agent.")
                 agent = RandomAgent(game.action_space_size)
         
-        # Run episode
-        result = play_agent_mode(
-            game, renderer, agent,
-            max_steps=args.max_steps,
-            render=not args.no_render
-        )
-        
-        print(f"Episode finished:")
-        print(f"  Total Reward: {result['total_reward']:.2f}")
-        print(f"  Steps: {result['steps']}")
-        print(f"  Score: {result['score']}")
-        print(f"  Snake Length: {result['snake_length']}")
-        
-        if renderer:
-            renderer.close()
+        # Run episodes with auto-restart
+        try:
+            while True:
+                result = play_agent_mode(
+                    game, renderer, agent,
+                    max_steps=args.max_steps,
+                    render=not args.no_render,
+                    auto_restart=True
+                )
+                
+                # If auto_restart is True, play_agent_mode will loop internally
+                # This break will only happen if user quits or auto_restart=False
+                if result:
+                    print(f"Episode {result.get('episode', 1)} finished:")
+                    print(f"  Total Reward: {result['total_reward']:.2f}")
+                    print(f"  Steps: {result['steps']}")
+                    print(f"  Score: {result['score']}")
+                    print(f"  Snake Length: {result['snake_length']}")
+                    break
+        except KeyboardInterrupt:
+            print("\nAgent mode interrupted.")
+        finally:
+            if renderer:
+                renderer.close()
 
 
 if __name__ == '__main__':
