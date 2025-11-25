@@ -156,7 +156,8 @@ class MoveBasedSnakeGame:
                 self.wall_animations[wall_pos] = 0
                 # Walls are added immediately but animation plays
                 self.walls.add(wall_pos)
-                reward = 0.1  # Small reward for strategic wall placement
+                reward = 2.0  # Reward for strategic wall placement
+                self.score += 2  # +2 points for placing a wall
             else:
                 reward = -0.1  # Penalty for trying to detach when not possible
         elif action == 5:  # NO_OP

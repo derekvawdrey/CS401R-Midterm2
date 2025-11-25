@@ -120,18 +120,22 @@ def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer],
             total_reward += reward
             step_count += 1
             
-            # Render if enabled
+            # Render if enabled (but limit event checking for speed)
             if render and renderer:
-                render_event = renderer.handle_events()
-                if render_event == 'quit':
-                    return {
-                        'total_reward': total_reward,
-                        'steps': step_count,
-                        'score': game.score,
-                        'snake_length': len(game.snake.body) if game.snake else 0,
-                        'episode': episode_count
-                    }
-                renderer.render(game.get_state_dict())
+                # Only check events occasionally (every 100 steps) to avoid slowdown
+                if step_count % 100 == 0:
+                    render_event = renderer.handle_events()
+                    if render_event == 'quit':
+                        return {
+                            'total_reward': total_reward,
+                            'steps': step_count,
+                            'score': game.score,
+                            'snake_length': len(game.snake.body) if game.snake else 0,
+                            'episode': episode_count
+                        }
+                # Skip sound checking every step for speed (sounds still work)
+                skip_sound = (step_count % 10 != 0)
+                renderer.render(game.get_state_dict(), info, skip_sound_check=skip_sound)
         
         episode_count += 1
         result = {
@@ -145,11 +149,8 @@ def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer],
         if not auto_restart:
             return result
         
-        # Auto-restart for next episode - continue loop
-        # Small delay before restarting if rendering
-        if render and renderer:
-            import time
-        
+        # Auto-restart for next episode - continue loop immediately
+        # No delay in agent mode for maximum speed
         # Continue to next episode (loop will restart at the top)
 
 
@@ -197,7 +198,9 @@ def main():
             grid_width=args.width,
             grid_height=args.height,
             cell_size=30,
-            fps=10 if args.mode == 'player' else 5
+            fps=10 if args.mode == 'player' else 60,  # Higher FPS for agent mode
+            limit_fps=(args.mode == 'player'),  # Only limit FPS in player mode
+            enable_sound_effects=(args.mode == 'player')  # Only sound effects in player mode
         )
     
     # Run game

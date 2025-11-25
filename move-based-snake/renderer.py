@@ -14,7 +14,8 @@ class GameRenderer:
     """Handles rendering of the game using pygame."""
     
     def __init__(self, grid_width: int, grid_height: int, 
-                 cell_size: int = 30, fps: int = 10):
+                 cell_size: int = 30, fps: int = 10, limit_fps: bool = True,
+                 enable_sound_effects: bool = True):
         """
         Initialize the renderer.
         
@@ -23,11 +24,15 @@ class GameRenderer:
             grid_height: Height of the game grid
             cell_size: Size of each cell in pixels
             fps: Frames per second for rendering
+            limit_fps: Whether to limit FPS (False for maximum speed in agent mode)
+            enable_sound_effects: Whether to play sound effects (False for agent mode)
         """
         self.grid_width = grid_width
         self.grid_height = grid_height
         self.cell_size = cell_size
         self.fps = fps
+        self.limit_fps = limit_fps
+        self.enable_sound_effects = enable_sound_effects
         
         # Calculate window size
         self.window_width = grid_width * cell_size
@@ -248,6 +253,10 @@ class GameRenderer:
     
     def _check_and_play_sounds(self, state_dict: Dict[str, Any], info: Dict[str, Any] = None):
         """Check game state for events and play appropriate sounds."""
+        # Skip sound effects if disabled (but background music still plays)
+        if not self.enable_sound_effects:
+            return
+        
         walls = state_dict.get('walls', set())
         monsters = state_dict.get('monsters', [])
         done = state_dict.get('done', False)
@@ -301,16 +310,19 @@ class GameRenderer:
             except Exception:
                 pass
     
-    def render(self, state_dict: Dict[str, Any], info: Dict[str, Any] = None):
+    def render(self, state_dict: Dict[str, Any], info: Dict[str, Any] = None, 
+               skip_sound_check: bool = False):
         """
         Render the current game state.
         
         Args:
             state_dict: Dictionary containing game state
             info: Optional info dictionary from game.step() with events like monsters_eaten
+            skip_sound_check: If True, skip sound checking for faster rendering
         """
-        # Check for events and play sounds
-        self._check_and_play_sounds(state_dict, info)
+        # Check for events and play sounds (skip in fast mode)
+        if not skip_sound_check:
+            self._check_and_play_sounds(state_dict, info)
         
         self.screen.fill(self.BACKGROUND)
         
@@ -375,7 +387,12 @@ class GameRenderer:
                     self._draw_cell(pos, self.SNAKE_BODY, self.snake_body_img)
         
         pygame.display.flip()
-        self.clock.tick(self.fps)
+        # Only limit FPS if we're in interactive mode (player mode)
+        # In agent mode with rendering, we can go faster
+        # Check if we should skip FPS limiting (for fast agent mode)
+        if hasattr(self, 'limit_fps') and self.limit_fps:
+            self.clock.tick(self.fps)
+        # In agent mode, don't limit FPS - let it run as fast as possible
     
     def _draw_cell(self, pos: tuple, color: tuple, image: Optional[pygame.Surface] = None):
         """Draw a cell at the given grid position."""
