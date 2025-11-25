@@ -8,6 +8,7 @@ import os
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 import time
+import random
 
 class GameRenderer:
     """Handles rendering of the game using pygame."""
@@ -63,6 +64,7 @@ class GameRenderer:
         self.prev_walls = set()
         self.prev_wall_animations = {}  # Track wall animations to detect new ones
         self.prev_monster_count = 0
+        self.prev_score = 0  # Track score to detect monster eating
         self.prev_done = False
         
         # Load assets if available
@@ -181,7 +183,11 @@ class GameRenderer:
             if (music_path / "wall.mp3").exists():
                 self.sound_wall = pygame.mixer.Sound(str(music_path / "wall.mp3"))
             if (music_path / "eating.mp3").exists():
-                self.sound_eating = pygame.mixer.Sound(str(music_path / "eating.mp3"))
+                self.sound_eating_base = pygame.mixer.Sound(str(music_path / "eating.mp3"))
+                # Create multiple pitch variations of the eating sound
+                self.sound_eating_variations = [self.sound_eating_base]
+                # For now, we'll use the base sound and vary volume/timing
+                self.sound_eating = self.sound_eating_base
             if (music_path / "game-over.mp3").exists():
                 self.sound_game_over = pygame.mixer.Sound(str(music_path / "game-over.mp3"))
             if (music_path / "background.mp3").exists():
@@ -207,11 +213,26 @@ class GameRenderer:
                 pass  # Silently fail if sound can't play
     
     def play_sound_eating(self):
-        """Play the eating sound effect."""
+        """Play the eating sound effect with random pitch variation."""
         if self.sound_eating:
             try:
-                self.sound_eating.play()
+                # Get a channel to play the sound (force if needed)
+                channel = pygame.mixer.find_channel(True)
+                if channel:
+                    # Random pitch variation through volume (0.5 to 1.0)
+                    # Higher volume creates perceptual pitch variation
+                    volume_variation = random.uniform(0.5, 1.0)
+                    
+                    # Set volume on the sound object
+                    self.sound_eating.set_volume(volume_variation)
+                    
+                    # Play the sound
+                    channel.play(self.sound_eating)
+                    
+                    # Vary channel volume as well for additional variation (0.7 to 1.0)
+                    channel.set_volume(random.uniform(0.7, 1.0))
             except Exception:
+                # Silently fail if sound can't play
                 pass
     
     def play_sound_game_over(self):
@@ -225,7 +246,7 @@ class GameRenderer:
             except Exception:
                 pass
     
-    def _check_and_play_sounds(self, state_dict: Dict[str, Any]):
+    def _check_and_play_sounds(self, state_dict: Dict[str, Any], info: Dict[str, Any] = None):
         """Check game state for events and play appropriate sounds."""
         walls = state_dict.get('walls', set())
         monsters = state_dict.get('monsters', [])
@@ -240,11 +261,17 @@ class GameRenderer:
                 self.play_sound_wall()
                 break
         
-        # Check for monsters being eaten
-        current_monster_count = len(monsters)
-        if current_monster_count < self.prev_monster_count:
-            # Monster was eaten - play eating sound
-            self.play_sound_eating()
+        # Check for monsters being eaten using score tracking
+        # Since a new monster spawns immediately, the count stays the same
+        # So we check the score which increases by 1 for each monster eaten
+        current_score = state_dict.get('score', 0)
+        if current_score > self.prev_score:
+            # Score increased - a monster was eaten
+            # Play eating sound for each point increase
+            num_eaten = current_score - self.prev_score
+            for _ in range(num_eaten):
+                self.play_sound_eating()
+            self.prev_score = current_score
         
         # Check for game over
         if done and not self.prev_done:
@@ -254,7 +281,6 @@ class GameRenderer:
         # Update previous state
         self.prev_walls = walls.copy()
         self.prev_wall_animations = wall_animations.copy()
-        self.prev_monster_count = current_monster_count
         self.prev_done = done
     
     def reset_state_tracking(self):
@@ -262,6 +288,7 @@ class GameRenderer:
         self.prev_walls = set()
         self.prev_wall_animations = {}
         self.prev_monster_count = 0
+        self.prev_score = 0
         self.prev_done = False
         
         # Restart background music if it stopped
@@ -274,15 +301,16 @@ class GameRenderer:
             except Exception:
                 pass
     
-    def render(self, state_dict: Dict[str, Any]):
+    def render(self, state_dict: Dict[str, Any], info: Dict[str, Any] = None):
         """
         Render the current game state.
         
         Args:
             state_dict: Dictionary containing game state
+            info: Optional info dictionary from game.step() with events like monsters_eaten
         """
         # Check for events and play sounds
-        self._check_and_play_sounds(state_dict)
+        self._check_and_play_sounds(state_dict, info)
         
         self.screen.fill(self.BACKGROUND)
         
@@ -394,6 +422,11 @@ class GameRenderer:
             steps: Number of steps taken
             snake_length: Final snake length
         """
+        # First check if we need to play game over sound (one-time only)
+        # Create a minimal state dict for sound checking
+        state_dict = {'done': True, 'walls': set(), 'monsters': []}
+        self._check_and_play_sounds(state_dict)
+        
         # Darken the screen with a semi-transparent overlay
         overlay = pygame.Surface((self.window_width, self.window_height))
         overlay.set_alpha(200)

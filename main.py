@@ -51,6 +51,8 @@ def play_player_mode(game: MoveBasedSnakeGame, renderer: GameRenderer):
                 
                 if done:
                     game_over = True
+                    # Check for sounds one more time (including game over sound)
+                    renderer._check_and_play_sounds(game.get_state_dict())
                     # Render game over screen
                     renderer.render_game_over(
                         score=info.get('score', 0),
@@ -58,8 +60,8 @@ def play_player_mode(game: MoveBasedSnakeGame, renderer: GameRenderer):
                         snake_length=info.get('snake_length', 0)
                     )
                 else:
-                    # Render normal game state
-                    renderer.render(game.get_state_dict())
+                    # Render normal game state (pass info for sound detection)
+                    renderer.render(game.get_state_dict(), info)
                     # Small status update every 50 steps
                     if info.get('steps', 0) % 50 == 0:
                         print(f"Steps: {info['steps']}, Snake Length: {info['snake_length']}")
