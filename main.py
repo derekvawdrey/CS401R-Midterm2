@@ -79,7 +79,8 @@ def play_player_mode(game: MoveBasedSnakeGame, renderer: GameRenderer):
 
 
 def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer], 
-                    agent, max_steps: int = 1000, render: bool = True, auto_restart: bool = True):
+                    agent, max_steps: int = 1000, render: bool = True, auto_restart: bool = True,
+                    debug: bool = False):
     """
     Run the game in agent mode.
     
@@ -107,13 +108,17 @@ def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer],
         while not game.done and step_count < max_steps:
             # Get action from agent
             if hasattr(agent, 'predict'):
-                action = agent.predict(state)
+                action = agent.predict(state, debug=(debug and step_count < 10))
             elif hasattr(agent, 'act'):
                 action = agent.act(state)
             elif callable(agent):
                 action = agent(state)
             else:
                 raise ValueError("Agent must have a predict(), act() method, or be callable")
+            
+            if debug and step_count < 10:
+                action_names = ['UP', 'RIGHT', 'DOWN', 'LEFT']
+                print(f"Step {step_count}: Action = {action} ({action_names[action] if 0 <= action < 4 else 'INVALID'})")
             
             # Perform action
             state, reward, done, info = game.step(action)
@@ -189,6 +194,8 @@ def main():
                        help='Disable danger signals in observation')
     parser.add_argument('--enable-danger-signals', action='store_true',
                        help='Enable danger signals in observation (overrides training_options.py)')
+    parser.add_argument('--debug-agent', action='store_true',
+                       help='Print Q-values and actions for debugging')
     
     args = parser.parse_args()
     
@@ -261,7 +268,8 @@ def main():
                     game, renderer, agent,
                     max_steps=args.max_steps,
                     render=not args.no_render,
-                    auto_restart=True
+                    auto_restart=True,
+                    debug=args.debug_agent
                 )
                 
                 # If auto_restart is True, play_agent_mode will loop internally

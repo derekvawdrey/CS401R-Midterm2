@@ -75,17 +75,18 @@ class SnakeDQNAgent(BaseAgent):
             print(f"Loading model from {model_path}")
             self.dqn.load(model_path)
     
-    def predict(self, state: np.ndarray) -> int:
+    def predict(self, state: np.ndarray, debug: bool = False) -> int:
         """
         Predict the next action given an observation (no exploration).
         
         Args:
             state: Game state observation (flattened grid)
+            debug: If True, print Q-values for debugging
             
         Returns:
-            Action to take (0-5)
+            Action to take (0-3)
         """
-        return self.dqn.predict(state)
+        return self.dqn.predict(state, debug=debug)
     
     def act(self, state: np.ndarray, training: bool = True) -> int:
         """

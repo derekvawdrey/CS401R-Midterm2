@@ -163,17 +163,29 @@ class DQNAgent:
             q_values = self.q_network(state_tensor)
         return q_values.argmax().item()
     
-    def predict(self, state: np.ndarray) -> int:
+    def predict(self, state: np.ndarray, debug: bool = False) -> int:
         """
         Predict the best action (no exploration).
         
         Args:
             state: Current state observation
+            debug: If True, print Q-values for debugging
             
         Returns:
             Best action according to the Q-network
         """
-        return self.act(state, training=False)
+        self.q_network.eval()  # Ensure eval mode
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            q_values = self.q_network(state_tensor)
+        
+        q_values_np = q_values.cpu().numpy()[0]
+        if debug:
+            action_names = ['UP', 'RIGHT', 'DOWN', 'LEFT']
+            print(f"Q-values: {q_values_np}")
+            print(f"  Best action: {q_values.argmax().item()} ({action_names[q_values.argmax().item()]})")
+        
+        return q_values.argmax().item()
     
     def remember(self, state: np.ndarray, action: int, reward: float,
                  next_state: np.ndarray, done: bool):
@@ -238,18 +250,43 @@ class DQNAgent:
             'target_network_state_dict': self.target_network.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'epsilon': self.epsilon,
-            'train_step': self.train_step
+            'train_step': self.train_step,
+            'state_size': self.state_size,
+            'action_size': self.action_size
         }, filepath)
     
     def load(self, filepath: str):
         """Load the Q-network from a file."""
         checkpoint = torch.load(filepath, map_location=self.device)
+        
+        # Check if state/action sizes match
+        saved_state_size = checkpoint.get('state_size', None)
+        saved_action_size = checkpoint.get('action_size', None)
+        
+        if saved_state_size is not None and saved_state_size != self.state_size:
+            raise ValueError(
+                f"State size mismatch! Model was trained with state_size={saved_state_size}, "
+                f"but current game has state_size={self.state_size}. "
+                f"Make sure danger signals setting matches training configuration."
+            )
+        
+        if saved_action_size is not None and saved_action_size != self.action_size:
+            raise ValueError(
+                f"Action size mismatch! Model was trained with action_size={saved_action_size}, "
+                f"but current game has action_size={self.action_size}."
+            )
+        
         self.q_network.load_state_dict(checkpoint['q_network_state_dict'])
         self.target_network.load_state_dict(checkpoint['target_network_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.epsilon = checkpoint.get('epsilon', self.epsilon_min)
         self.train_step = checkpoint.get('train_step', 0)
+        
+        # Set networks to eval mode for inference
+        self.q_network.eval()
         self.target_network.eval()
+        
+        print(f"Model loaded: state_size={self.state_size}, action_size={self.action_size}, epsilon={self.epsilon:.4f}")
     
     def __call__(self, state: np.ndarray) -> int:
         """Make the agent callable."""
