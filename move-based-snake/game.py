@@ -10,9 +10,11 @@ import numpy as np
 try:
     from .snake import Snake
     from .monsters.base_monster import Monster
+    from .rewards import COLLISION_REWARD, EAT_MONSTER_REWARD, SURVIVAL_REWARD
 except ImportError:
     from snake import Snake
     from monsters.base_monster import Monster
+    from rewards import COLLISION_REWARD, EAT_MONSTER_REWARD, SURVIVAL_REWARD
 
 class MoveBasedSnakeGame:
     """
@@ -150,7 +152,7 @@ class MoveBasedSnakeGame:
             # Check collision with walls/boundaries/self
             if self.snake.check_collision(self.grid_width, self.grid_height):
                 self.done = True
-                reward = -10.0
+                reward = COLLISION_REWARD
                 info['reason'] = 'collision'
                 info['snake_length'] = len(self.snake.body)
                 return self._get_observation(), reward, True, info
@@ -167,7 +169,7 @@ class MoveBasedSnakeGame:
                 self.monsters.remove(monster)
                 # Grow the snake by adding a segment at the tail
                 self.snake.grow()
-                reward += 5.0  # Reward for eating a monster
+                reward += EAT_MONSTER_REWARD  # Reward for eating a monster
                 self.score += 1
                 
                 # Spawn a new monster at a random empty position
@@ -235,7 +237,7 @@ class MoveBasedSnakeGame:
                 occupied_positions.add(monster.pos)
         
         # Small survival reward
-        reward += 0.01
+        reward += SURVIVAL_REWARD
         
         info['snake_length'] = len(self.snake.body) if self.snake else 0
         
