@@ -46,45 +46,118 @@ python main.py --mode agent --random-agent
 
 **Options:**
 - `--random-agent`: Use a random agent for testing
+- `--dqn-model PATH`: Load a trained DQN model
 - `--no-render`: Disable rendering (faster training)
 - `--max-steps N`: Maximum steps per episode (default: 1000)
 
-### Using with Your Own Agent
+### Training Agents
 
-To hook in your own RL agent, modify `main.py` or create your own script:
+Train an agent using the general training script:
+
+```bash
+python train_agent.py --agent dqn --episodes 1000
+```
+
+**Training Options:**
+- `--agent TYPE`: Agent type to train (default: dqn)
+- `--episodes N`: Number of training episodes (default: 1000)
+- `--width N`: Grid width (default: 20)
+- `--height N`: Grid height (default: 20)
+- `--monsters N`: Number of monsters (default: 3)
+- `--render`: Render the game during training (slower)
+- `--load-model PATH`: Load a pre-trained model to continue training
+- `--save-model PATH`: Path to save the trained model (default: agent_model.pth)
+- `--save-freq N`: Frequency (episodes) to save model (default: 100)
+- `--learning-rate FLOAT`: Learning rate (default: 0.001)
+- `--gamma FLOAT`: Discount factor (default: 0.99)
+- `--epsilon FLOAT`: Initial exploration rate (default: 1.0)
+- `--epsilon-min FLOAT`: Minimum exploration rate (default: 0.01)
+- `--epsilon-decay FLOAT`: Epsilon decay rate (default: 0.995)
+- `--batch-size N`: Batch size for training (default: 64)
+- `--memory-size N`: Replay buffer size (default: 10000)
+- `--max-steps N`: Maximum steps per episode (default: 1000)
+
+**Example:**
+```bash
+# Train a DQN agent for 2000 episodes
+python train_agent.py --agent dqn --episodes 2000 --save-model my_dqn.pth
+
+# Continue training from a saved model
+python train_agent.py --agent dqn --episodes 1000 --load-model my_dqn.pth --save-model my_dqn.pth
+
+# Test a trained model
+python main.py --mode agent --dqn-model my_dqn.pth
+```
+
+### Creating Your Own Agent
+
+To create your own agent, inherit from `BaseAgent` in `agents/base_agent.py`:
 
 ```python
-from move_based_snake.game import MoveBasedSnakeGame
+from agents.base_agent import BaseAgent
+import numpy as np
 
-# Create game environment
-game = MoveBasedSnakeGame(grid_width=20, grid_height=20, num_monsters=3)
-
-# Reset and get initial observation
-obs = game.reset()
-
-# Game loop
-while not game.done:
-    # Get action from your agent
-    action = your_agent.predict(obs)  # or your_agent.act(obs)
+class MyAgent(BaseAgent):
+    def __init__(self, game):
+        super().__init__(game)
+        # Initialize your agent here
     
-    # Step the environment
-    obs, reward, done, info = game.step(action)
+    def predict(self, observation: np.ndarray) -> int:
+        """Predict the best action (no exploration)."""
+        # Your prediction logic here
+        return action
     
-    # Train your agent here if needed
-    # your_agent.train(obs, reward, done, ...)
+    def act(self, observation: np.ndarray, training: bool = True) -> int:
+        """Choose an action (with exploration if training)."""
+        # Your action selection logic here
+        return action
+    
+    def __call__(self, observation: np.ndarray) -> int:
+        """Make the agent callable."""
+        return self.predict(observation)
+    
+    # Optional methods for training:
+    # def remember(self, state, action, reward, next_state, done): ...
+    # def train_step(self) -> Optional[float]: ...
+    # def save(self, filepath: str): ...
+    # def load(self, filepath: str): ...
 ```
+
+Then train it using the general training function:
+
+```python
+from agents.trainer import train_any_agent
+from game import MoveBasedSnakeGame
+
+game = MoveBasedSnakeGame(grid_width=20, grid_height=20, num_monsters=3)
+agent = MyAgent(game)
+
+train_any_agent(
+    game=game,
+    agent=agent,
+    num_episodes=1000,
+    model_path="my_agent.pth"
+)
+```
+
+### Game Details
 
 The game supports 6 actions:
 - `0`: UP
 - `1`: RIGHT
 - `2`: DOWN
 - `3`: LEFT
+
 The observation is a flattened grid (width × height) with values:
 - `2.0`: Snake head
 - `1.0`: Snake body
 - `-1.0`: Monster
-- `3.0`: Wall
 - `0.0`: Empty cell
 
+Rewards (these can be changed in rewards.py):
+- `-10.0`: Collision (game over)
+- `5.0`: Eating a monster
+- `0.0`: Survival reward per step
+
 ## Solution
-The solution is implemented in the ```trainer/solution_model.py```
+The solution is implemented in `agents/solution_model.py`

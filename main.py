@@ -179,6 +179,8 @@ def main():
                        help='Disable rendering (for agent mode)')
     parser.add_argument('--random-agent', action='store_true',
                        help='Use random agent for testing')
+    parser.add_argument('--dqn-model', type=str, default=None,
+                       help='Path to a trained DQN model to use')
     parser.add_argument('--max-steps', type=int, default=1000,
                        help='Maximum steps per episode (default: 1000)')
     
@@ -216,11 +218,22 @@ def main():
         # Create agent
         if args.random_agent:
             agent = RandomAgent(game.action_space_size)
+        elif args.dqn_model:
+            # Load DQN agent
+            try:
+                from agents.dqn_agent import SnakeDQNAgent
+                print(f"Loading DQN agent from {args.dqn_model}")
+                agent = SnakeDQNAgent(game, model_path=args.dqn_model)
+                print("DQN agent loaded successfully!")
+            except Exception as e:
+                print(f"Error loading DQN agent: {e}")
+                print("Falling back to random agent.")
+                agent = RandomAgent(game.action_space_size)
         else:
             # Try to load agent from trainer
             try:
                 # User can provide their own agent here
-                print("No agent provided. Using random agent. Implement your agent in trainer/")
+                print("No agent provided. Using random agent. Use --dqn-model to load a trained DQN.")
                 agent = RandomAgent(game.action_space_size)
             except Exception as e:
                 print(f"Error loading agent: {e}. Using random agent.")

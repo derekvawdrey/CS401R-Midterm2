@@ -12,5 +12,5 @@ COLLISION_REWARD = -10.0
 EAT_MONSTER_REWARD = 5.0
 
 # Reward for surviving each step (small positive reward to encourage survival)
-SURVIVAL_REWARD = 0.01
+SURVIVAL_REWARD = 0.0
 
