@@ -13,7 +13,7 @@ class Monster:
     DIRECTIONS = [UP, RIGHT, DOWN, LEFT]
     
     def __init__(self, pos: Tuple[int, int], avoidance_prob: float = 0.8,
-                 monster_type: str = None):
+                 monster_type: str = None, stay_prob: float = 0.2):
         """
         Initialize a monster.
         
@@ -21,10 +21,12 @@ class Monster:
             pos: Initial position
             avoidance_prob: Probability of using avoidance behavior vs random (default 0.8)
             monster_type: Type/name of the monster (for sprite loading)
+            stay_prob: Probability of staying in place instead of moving (default 0.2)
         """
         self.pos = pos
         self.avoidance_prob = avoidance_prob
         self.monster_type = monster_type
+        self.stay_prob = stay_prob
     
     def get_position(self) -> Tuple[int, int]:
         """Get the monster's current position."""
@@ -41,6 +43,7 @@ class Monster:
                         grid_width: int, grid_height: int) -> Optional[Tuple[int, int]]:
         """
         Choose a direction to move, trying to avoid the snake.
+        Sometimes stays in place.
         
         Args:
             snake_head: Position of the snake's head
@@ -50,6 +53,10 @@ class Monster:
             grid_width: Width of the grid
             grid_height: Height of the grid
         """
+        # Random chance to stay in place
+        if random.random() < self.stay_prob:
+            return None
+        
         # Random behavior
         if random.random() > self.avoidance_prob:
             valid_dirs = self._get_valid_directions(walls, snake_body, monsters, 

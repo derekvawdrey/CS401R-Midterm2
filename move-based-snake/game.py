@@ -142,15 +142,35 @@ class MoveBasedSnakeGame:
         elif 0 <= action <= 3:  # Movement action
             direction = self.ACTIONS[action]
             self.snake.set_direction(direction)
-            old_tail = self.snake.move(grow=False)
+            old_tail = self.snake.move(grow=False, 
+                                      grid_width=self.grid_width, 
+                                      grid_height=self.grid_height)
             
-            # Check collision
+            # Check collision with walls/boundaries/self
             if self.snake.check_collision(self.walls, self.grid_width, self.grid_height):
                 self.done = True
                 reward = -10.0
                 info['reason'] = 'collision'
                 info['snake_length'] = len(self.snake.body)
                 return self._get_observation(), reward, True, info
+            
+            # Check collision with monsters (eat them!)
+            snake_head = self.snake.get_head()
+            eaten_monsters = []
+            for monster in self.monsters:
+                if monster.get_position() == snake_head:
+                    eaten_monsters.append(monster)
+            
+            # Eat monsters - snake grows and monsters are removed
+            for monster in eaten_monsters:
+                self.monsters.remove(monster)
+                # Grow the snake by adding a segment at the tail
+                self.snake.grow()
+                reward += 5.0  # Reward for eating a monster
+                self.score += 1
+            
+            if eaten_monsters:
+                info['monsters_eaten'] = len(eaten_monsters)
         
         # Move monsters (they all move simultaneously based on current state)
         snake_head = self.snake.get_head()

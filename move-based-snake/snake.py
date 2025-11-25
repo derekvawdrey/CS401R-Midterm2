@@ -35,12 +35,15 @@ class Snake:
         if (direction[0] * -1, direction[1] * -1) != self.direction:
             self.next_direction = direction
     
-    def move(self, grow: bool = False) -> Optional[Tuple[int, int]]:
+    def move(self, grow: bool = False, grid_width: int = None, grid_height: int = None) -> Optional[Tuple[int, int]]:
         """
         Move the snake one step. Returns the old tail position if not growing.
+        Wraps around boundaries if grid dimensions are provided.
         
         Args:
             grow: If True, the snake grows by one segment
+            grid_width: Width of the grid (for wrapping)
+            grid_height: Height of the grid (for wrapping)
             
         Returns:
             Old tail position if not growing, None otherwise
@@ -48,6 +51,10 @@ class Snake:
         self.direction = self.next_direction
         head = self.get_head()
         new_head = (head[0] + self.direction[0], head[1] + self.direction[1])
+        
+        # Wrap around boundaries if grid dimensions provided
+        if grid_width is not None and grid_height is not None:
+            new_head = (new_head[0] % grid_width, new_head[1] % grid_height)
         
         old_tail = None
         if not grow:
@@ -57,18 +64,23 @@ class Snake:
         return old_tail
     
     def check_collision(self, walls: Set[Tuple[int, int]], 
-                       grid_width: int, grid_height: int) -> bool:
+                       grid_width: int = None, grid_height: int = None) -> bool:
         """
-        Check if the snake has collided with walls, boundaries, or itself.
+        Check if the snake has collided with walls or itself.
+        Boundaries are NOT checked (snake wraps around).
+        
+        Args:
+            walls: Set of wall positions
+            grid_width: Width of the grid (optional, not used for boundaries)
+            grid_height: Height of the grid (optional, not used for boundaries)
         
         Returns:
             True if collision detected, False otherwise
         """
         head = self.get_head()
         
-        # Check boundaries
-        if head[0] < 0 or head[0] >= grid_width or head[1] < 0 or head[1] >= grid_height:
-            return True
+        # Note: Boundaries are not checked - snake wraps around
+        # (boundary checking removed to enable wrapping)
         
         # Check walls
         if head in walls:
@@ -94,6 +106,12 @@ class Snake:
         if not self.can_detach_tail():
             return None
         return self.body.pop()
+    
+    def grow(self):
+        """Grow the snake by adding a segment at the tail (without moving)."""
+        if len(self.body) > 0:
+            tail = self.body[-1]
+            self.body.append(tail)
     
     def get_all_positions(self) -> Set[Tuple[int, int]]:
         """Get all positions occupied by the snake."""
