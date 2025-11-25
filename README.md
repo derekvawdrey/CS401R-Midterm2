@@ -4,8 +4,6 @@ In a regular Snake game, the snake automatically moves every frame, whether you 
 
 But there’s a twist. Instead of apples, there are monsters. These monsters move around the map and try to avoid you. Their behavior can be partly random, but most of the time they actively attempt to stay away from the snake.
 
-As the snake, you can also detach segments of your body and turn them into walls. This takes the last segment of your body, and converts it into a wall. However, be careful, those walls become permanent obstacles for both you and the monsters, and running into them will still kill you.
-
 ## The Goal
 Our goal is to train a RL model that will learn to play the game the best it can.
 
@@ -81,9 +79,6 @@ The game supports 6 actions:
 - `1`: RIGHT
 - `2`: DOWN
 - `3`: LEFT
-- `4`: DETACH_TAIL (convert last segment to wall)
-- `5`: NO_OP (do nothing, monsters still move)
-
 The observation is a flattened grid (width × height) with values:
 - `2.0`: Snake head
 - `1.0`: Snake body

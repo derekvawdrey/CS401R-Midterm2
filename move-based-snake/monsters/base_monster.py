@@ -37,7 +37,6 @@ class Monster:
         return math.sqrt((pos1[0] - pos2[0])**2 + (pos1[1] - pos2[1])**2)
     
     def choose_direction(self, snake_head: Tuple[int, int], 
-                        walls: Set[Tuple[int, int]],
                         snake_body: Set[Tuple[int, int]],
                         monsters: Set[Tuple[int, int]],
                         grid_width: int, grid_height: int) -> Optional[Tuple[int, int]]:
@@ -47,7 +46,6 @@ class Monster:
         
         Args:
             snake_head: Position of the snake's head
-            walls: Set of wall positions
             snake_body: Set of all snake body positions
             monsters: Set of other monster positions
             grid_width: Width of the grid
@@ -59,12 +57,12 @@ class Monster:
         
         # Random behavior
         if random.random() > self.avoidance_prob:
-            valid_dirs = self._get_valid_directions(walls, snake_body, monsters, 
+            valid_dirs = self._get_valid_directions(snake_body, monsters, 
                                                    grid_width, grid_height)
             return random.choice(valid_dirs) if valid_dirs else None
         
         # Avoidance behavior - move in direction that maximizes distance from snake
-        valid_dirs = self._get_valid_directions(walls, snake_body, monsters,
+        valid_dirs = self._get_valid_directions(snake_body, monsters,
                                                grid_width, grid_height)
         
         if not valid_dirs:
@@ -83,7 +81,7 @@ class Monster:
         
         return best_dir if best_dir is not None else random.choice(valid_dirs)
     
-    def _get_valid_directions(self, walls: Set[Tuple[int, int]],
+    def _get_valid_directions(self,
                              snake_body: Set[Tuple[int, int]],
                              monsters: Set[Tuple[int, int]],
                              grid_width: int, grid_height: int) -> List[Tuple[int, int]]:
@@ -96,10 +94,6 @@ class Monster:
             # Check boundaries
             if new_pos[0] < 0 or new_pos[0] >= grid_width or \
                new_pos[1] < 0 or new_pos[1] >= grid_height:
-                continue
-            
-            # Check walls
-            if new_pos in walls:
                 continue
             
             # Check snake body - monsters cannot walk into the snake

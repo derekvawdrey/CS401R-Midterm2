@@ -64,14 +64,13 @@ class Snake:
         self.body.insert(0, new_head)
         return old_tail
     
-    def check_collision(self, walls: Set[Tuple[int, int]], 
+    def check_collision(self, 
                        grid_width: int = None, grid_height: int = None) -> bool:
         """
         Check if the snake has collided with walls or itself.
         Boundaries are NOT checked (snake wraps around).
         
         Args:
-            walls: Set of wall positions
             grid_width: Width of the grid (optional, not used for boundaries)
             grid_height: Height of the grid (optional, not used for boundaries)
         
@@ -83,30 +82,11 @@ class Snake:
         # Note: Boundaries are not checked - snake wraps around
         # (boundary checking removed to enable wrapping)
         
-        # Check walls
-        if head in walls:
-            return True
-        
         # Check self-collision
         if head in self.body[1:]:
             return True
         
         return False
-    
-    def can_detach_tail(self) -> bool:
-        """Check if the snake has enough segments to detach the tail."""
-        return len(self.body) > 1
-    
-    def detach_tail(self) -> Optional[Tuple[int, int]]:
-        """
-        Detach the tail segment and return its position as a wall.
-        
-        Returns:
-            Position of the detached tail segment, or None if not possible
-        """
-        if not self.can_detach_tail():
-            return None
-        return self.body.pop()
     
     def grow(self):
         """Grow the snake by adding a segment at the tail (without moving)."""

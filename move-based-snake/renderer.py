@@ -1,6 +1,6 @@
 """
 Renderer for the move-based Snake game using pygame.
-Supports animations for wall creation and monsters.
+Supports monsters.
 """
 
 import pygame
@@ -46,7 +46,6 @@ class GameRenderer:
         self.clock = pygame.time.Clock()
         
         # Sound effects
-        self.sound_wall = None
         self.sound_eating = None
         self.sound_game_over = None
         self.sound_background = None
@@ -57,7 +56,6 @@ class GameRenderer:
         self.SNAKE_HEAD = (100, 200, 100)
         self.SNAKE_BODY = (50, 150, 50)
         self.MONSTER = (200, 50, 50)
-        self.WALL = (100, 100, 100)
         self.GRID_LINES = (40, 40, 40)
         
         # Animation tracking
@@ -66,8 +64,6 @@ class GameRenderer:
         self.animation_speed = 0.15  # Seconds per frame
         
         # State tracking for sound effects
-        self.prev_walls = set()
-        self.prev_wall_animations = {}  # Track wall animations to detect new ones
         self.prev_monster_count = 0
         self.prev_score = 0  # Track score to detect monster eating
         self.prev_done = False
@@ -77,8 +73,6 @@ class GameRenderer:
         self.snake_head_img = None
         self.snake_body_img = None
         self.snake_tail_img = None
-        self.wall_animation_frames: List[pygame.Surface] = []
-        self.wall_final_img: Optional[pygame.Surface] = None
         self.monster_sprites: Dict[str, List[pygame.Surface]] = {}
         
         self._load_assets()
@@ -105,33 +99,6 @@ class GameRenderer:
                 self.snake_tail_img = pygame.transform.scale(
                     self.snake_tail_img, (self.cell_size, self.cell_size)
                 )
-            
-            # Load wall animation spritesheet (3x3 grid, 9 frames)
-            if (snake_path / "snake_wall_animation.png").exists():
-                wall_sheet = pygame.image.load(snake_path / "snake_wall_animation.png")
-                wall_sheet = wall_sheet.convert_alpha()  # Ensure alpha channel
-                
-                # Get actual dimensions and calculate frame size
-                sheet_width = wall_sheet.get_width()
-                sheet_height = wall_sheet.get_height()
-                rows = 3
-                cols = 3
-                frame_size = min(sheet_width // cols, sheet_height // rows)
-                
-                # Extract each frame from the spritesheet in the order specified:
-                # row 1 col 1, row 1 col 2, row 1 col 3, row 2 col 1, etc.
-                for row in range(rows):
-                    for col in range(cols):
-                        x = col * frame_size
-                        y = row * frame_size
-                        frame = pygame.Surface((frame_size, frame_size), pygame.SRCALPHA)
-                        frame.blit(wall_sheet, (0, 0), (x, y, frame_size, frame_size))
-                        frame = pygame.transform.scale(frame, (self.cell_size, self.cell_size))
-                        self.wall_animation_frames.append(frame)
-                
-                # The last frame becomes the final wall sprite
-                if self.wall_animation_frames:
-                    self.wall_final_img = self.wall_animation_frames[-1].copy()
             
             # Load monster spritesheets
             monsters_path = self.assets_path / "monsters"
@@ -184,9 +151,7 @@ class GameRenderer:
         try:
             music_path = self.assets_path / "music"
             
-            # Load sound effects
-            if (music_path / "wall.mp3").exists():
-                self.sound_wall = pygame.mixer.Sound(str(music_path / "wall.mp3"))
+
             if (music_path / "eating.mp3").exists():
                 self.sound_eating_base = pygame.mixer.Sound(str(music_path / "eating.mp3"))
                 # Create multiple pitch variations of the eating sound
@@ -208,14 +173,6 @@ class GameRenderer:
             
         except Exception as e:
             print(f"Warning: Could not load some sound files: {e}")
-    
-    def play_sound_wall(self):
-        """Play the wall creation sound effect."""
-        if self.sound_wall:
-            try:
-                self.sound_wall.play()
-            except Exception:
-                pass  # Silently fail if sound can't play
     
     def play_sound_eating(self):
         """Play the eating sound effect with random pitch variation."""
@@ -257,18 +214,8 @@ class GameRenderer:
         if not self.enable_sound_effects:
             return
         
-        walls = state_dict.get('walls', set())
         monsters = state_dict.get('monsters', [])
         done = state_dict.get('done', False)
-        wall_animations = state_dict.get('wall_animations', {})
-        
-        # Check for new wall creation (wall animation starting)
-        # A new wall animation starts when frame_idx is 0 and wasn't in prev animations
-        for wall_pos, frame_idx in wall_animations.items():
-            if frame_idx == 0 and wall_pos not in self.prev_wall_animations:
-                # New wall animation just started - play wall sound
-                self.play_sound_wall()
-                break
         
         # Check for monsters being eaten using score tracking
         # Since a new monster spawns immediately, the count stays the same
@@ -288,14 +235,10 @@ class GameRenderer:
             self.play_sound_game_over()
         
         # Update previous state
-        self.prev_walls = walls.copy()
-        self.prev_wall_animations = wall_animations.copy()
         self.prev_done = done
     
     def reset_state_tracking(self):
         """Reset state tracking (call when game resets)."""
-        self.prev_walls = set()
-        self.prev_wall_animations = {}
         self.prev_monster_count = 0
         self.prev_score = 0
         self.prev_done = False
@@ -339,22 +282,6 @@ class GameRenderer:
         if current_time - self.last_animation_time >= self.animation_speed:
             self.animation_frame = (self.animation_frame + 1) % 1000  # Cycle through frames
             self.last_animation_time = current_time
-        
-        # Draw walls (with animations if in progress)
-        wall_animations = state_dict.get('wall_animations', {})
-        for wall_pos in state_dict.get('walls', set()):
-            if wall_pos in wall_animations:
-                # Draw animation frame
-                frame_index = wall_animations[wall_pos]
-                if frame_index < len(self.wall_animation_frames):
-                    self._draw_cell(wall_pos, self.WALL, 
-                                   self.wall_animation_frames[frame_index])
-                else:
-                    # Animation complete, draw final wall
-                    self._draw_cell(wall_pos, self.WALL, self.wall_final_img)
-            else:
-                # Regular wall (animation complete)
-                self._draw_cell(wall_pos, self.WALL, self.wall_final_img)
         
         # Draw monsters with animation
         for monster in state_dict.get('monsters', []):
@@ -424,8 +351,6 @@ class GameRenderer:
                     return 2  # DOWN
                 elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
                     return 3  # LEFT
-                elif event.key == pygame.K_SPACE:
-                    return 4  # DETACH_TAIL
                 elif event.key == pygame.K_r:
                     return 'reset'
         return None
@@ -441,7 +366,7 @@ class GameRenderer:
         """
         # First check if we need to play game over sound (one-time only)
         # Create a minimal state dict for sound checking
-        state_dict = {'done': True, 'walls': set(), 'monsters': []}
+        state_dict = {'done': True, 'monsters': []}
         self._check_and_play_sounds(state_dict)
         
         # Darken the screen with a semi-transparent overlay
