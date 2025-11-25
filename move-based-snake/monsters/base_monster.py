@@ -102,7 +102,10 @@ class Monster:
             if new_pos in walls:
                 continue
             
-            # Check snake body (monsters can overlap with snake body but prefer not to)
+            # Check snake body - monsters cannot walk into the snake
+            if new_pos in snake_body:
+                continue
+            
             # Check other monsters (monsters avoid each other)
             if new_pos in monsters:
                 continue

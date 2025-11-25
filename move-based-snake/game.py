@@ -105,6 +105,29 @@ class MoveBasedSnakeGame:
         
         return self._get_observation()
     
+    def _spawn_monster(self):
+        """Spawn a new monster at a random empty position."""
+        # Get all occupied positions
+        occupied = self.snake.get_all_positions()
+        occupied.update(self.walls)
+        occupied.update({m.get_position() for m in self.monsters})
+        
+        # Available monster types
+        monster_types = [
+            "Blinded Grimlock", "Bloodshot Eye", "Brawny Ogre", "Crimson Slaad",
+            "Crushing Cyclops", "Death Slime", "Fungal Myconid", "Humongous Ettin",
+            "Murky Slaad", "Ochre Jelly", "Ocular Watcher", "Red Cap",
+            "Shrieker Mushroom", "Stone Troll", "Swamp Troll"
+        ]
+        
+        # Find an empty position
+        pos = self._get_random_empty_position(occupied)
+        if pos is not None:
+            # Randomly select a monster type
+            monster_type = random.choice(monster_types)
+            monster = Monster(pos, self.monster_avoidance_prob, monster_type)
+            self.monsters.append(monster)
+    
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
         """
         Perform an action and advance the game state.
@@ -168,6 +191,9 @@ class MoveBasedSnakeGame:
                 self.snake.grow()
                 reward += 5.0  # Reward for eating a monster
                 self.score += 1
+                
+                # Spawn a new monster at a random empty position
+                self._spawn_monster()
             
             if eaten_monsters:
                 info['monsters_eaten'] = len(eaten_monsters)
@@ -186,9 +212,49 @@ class MoveBasedSnakeGame:
             )
             monster_moves.append((monster, direction))
         
-        # Execute all moves
+        # Execute moves, preventing collisions between monsters
+        # Track which positions will be occupied after all moves
+        occupied_positions = set()  # Positions that will be occupied after moves
+        
+        # First pass: calculate all planned positions
+        planned_positions = {}
         for monster, direction in monster_moves:
-            monster.move(direction)
+            if direction is not None:
+                new_pos = (monster.pos[0] + direction[0], monster.pos[1] + direction[1])
+                if new_pos not in planned_positions:
+                    planned_positions[new_pos] = []
+                planned_positions[new_pos].append(monster)
+            else:
+                # Monster staying in place
+                if monster.pos not in planned_positions:
+                    planned_positions[monster.pos] = []
+                planned_positions[monster.pos].append(monster)
+        
+        # Second pass: execute moves, preventing collisions
+        for monster, direction in monster_moves:
+            if direction is not None:
+                new_pos = (monster.pos[0] + direction[0], monster.pos[1] + direction[1])
+                
+                # Check if this position is already occupied or will be by another monster
+                if new_pos in occupied_positions:
+                    # Position already taken, monster stays in place
+                    occupied_positions.add(monster.pos)  # Current position stays occupied
+                    continue
+                
+                # Check if multiple monsters want this position
+                if new_pos in planned_positions and len(planned_positions[new_pos]) > 1:
+                    # Multiple monsters want same position - only first one in list moves
+                    if planned_positions[new_pos][0] != monster:
+                        # Not first monster, stay in place
+                        occupied_positions.add(monster.pos)
+                        continue
+                
+                # Safe to move
+                occupied_positions.add(new_pos)
+                monster.move(direction)
+            else:
+                # Monster staying in place
+                occupied_positions.add(monster.pos)
         
         # Update wall animations
         completed_animations = []
