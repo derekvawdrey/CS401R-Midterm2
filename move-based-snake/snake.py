@@ -54,6 +54,7 @@ class Snake:
         
         # Wrap around boundaries if grid dimensions provided
         if grid_width is not None and grid_height is not None:
+            # Wrap coordinates (Python's modulo handles negative numbers correctly)
             new_head = (new_head[0] % grid_width, new_head[1] % grid_height)
         
         old_tail = None
