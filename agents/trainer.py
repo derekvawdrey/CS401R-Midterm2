@@ -32,7 +32,7 @@ def train_any_agent(
     - save(filepath): Save model (optional)
     
     Args:
-        game: Game environment (MoveBasedSnakeGame instance)
+        game: Game environment (FallingObjectsGame instance)
         agent: Agent instance (must inherit from BaseAgent)
         num_episodes: Number of episodes to train
         max_steps_per_episode: Maximum steps per episode

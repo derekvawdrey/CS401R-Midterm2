@@ -1,6 +1,5 @@
 """
-Renderer for the move-based Snake game using pygame.
-Supports monsters.
+Renderer for the falling objects avoidance game using pygame.
 """
 
 import pygame
@@ -8,7 +7,6 @@ import os
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 import time
-import random
 
 class GameRenderer:
     """Handles rendering of the game using pygame."""
@@ -42,20 +40,21 @@ class GameRenderer:
         pygame.init()
         pygame.mixer.init()
         self.screen = pygame.display.set_mode((self.window_width, self.window_height))
-        pygame.display.set_caption("Move-Based Snake Game")
+        pygame.display.set_caption("Falling Objects Game")
         self.clock = pygame.time.Clock()
         
         # Sound effects
-        self.sound_eating = None
         self.sound_game_over = None
         self.sound_background = None
         self.background_playing = False
         
         # Colors
         self.BACKGROUND = (20, 20, 20)
-        self.SNAKE_HEAD = (100, 200, 100)
-        self.SNAKE_BODY = (50, 150, 50)
-        self.MONSTER = (200, 50, 50)
+        self.PLAYER = (100, 200, 100)  # Green for player
+        self.WALL = (100, 100, 100)  # Gray for walls
+        self.FALLING_OBJECT = (255, 100, 100)  # Red for falling objects
+        self.WARNING_2_STEPS = (255, 200, 100)  # Orange for 2-step warning
+        self.WARNING_1_STEP = (255, 150, 50)  # Darker orange for 1-step warning
         self.GRID_LINES = (40, 40, 40)
         
         # Animation tracking
@@ -64,15 +63,11 @@ class GameRenderer:
         self.animation_speed = 0.15  # Seconds per frame
         
         # State tracking for sound effects
-        self.prev_monster_count = 0
-        self.prev_score = 0  # Track score to detect monster eating
         self.prev_done = False
         
         # Load assets if available
         self.assets_path = Path(__file__).parent / "assets"
-        self.snake_head_img = None
-        self.snake_body_img = None
-        self.snake_tail_img = None
+        self.player_img = None
         self.monster_sprites: Dict[str, List[pygame.Surface]] = {}
         
         self._load_assets()
@@ -81,28 +76,10 @@ class GameRenderer:
     def _load_assets(self):
         """Load image assets if they exist."""
         try:
-            snake_path = self.assets_path / "snake"
-            
-            # Load snake parts
-            if (snake_path / "snake_head.png").exists():
-                self.snake_head_img = pygame.image.load(snake_path / "snake_head.png")
-                self.snake_head_img = pygame.transform.scale(
-                    self.snake_head_img, (self.cell_size, self.cell_size)
-                )
-            if (snake_path / "snake_body.png").exists():
-                self.snake_body_img = pygame.image.load(snake_path / "snake_body.png")
-                self.snake_body_img = pygame.transform.scale(
-                    self.snake_body_img, (self.cell_size, self.cell_size)
-                )
-            if (snake_path / "snake_tail.png").exists():
-                self.snake_tail_img = pygame.image.load(snake_path / "snake_tail.png")
-                self.snake_tail_img = pygame.transform.scale(
-                    self.snake_tail_img, (self.cell_size, self.cell_size)
-                )
-            
-            # Load monster spritesheets
+            # Try to load a monster sprite for the player
             monsters_path = self.assets_path / "monsters"
             if monsters_path.exists():
+                # Try to load the first available monster type
                 monster_types = [
                     "Blinded Grimlock", "Bloodshot Eye", "Brawny Ogre", "Crimson Slaad",
                     "Crushing Cyclops", "Death Slime", "Fungal Myconid", "Humongous Ettin",
@@ -112,18 +89,16 @@ class GameRenderer:
                 
                 for monster_type in monster_types:
                     monster_dir = monsters_path / monster_type
-                    # Try PNG first, then GIF
                     png_file = monster_dir / f"{monster_type.replace(' ', '')}.png"
                     
                     if png_file.exists():
                         try:
                             sprite_sheet = pygame.image.load(png_file)
-                            sprite_sheet = sprite_sheet.convert_alpha()  # Ensure alpha channel
+                            sprite_sheet = sprite_sheet.convert_alpha()
                             
-                            # Monster spritesheets are 64x16 (4 frames of 16x16)
                             sheet_width = sprite_sheet.get_width()
                             sheet_height = sprite_sheet.get_height()
-                            frame_size = min(sheet_height, sheet_width // 4)  # Assume 4 frames
+                            frame_size = min(sheet_height, sheet_width // 4)
                             num_frames = sheet_width // frame_size
                             
                             frames = []
@@ -137,6 +112,9 @@ class GameRenderer:
                             
                             if frames:
                                 self.monster_sprites[monster_type] = frames
+                                # Use first monster as player sprite
+                                if self.player_img is None:
+                                    self.player_img = frames[0]
                         except Exception as e:
                             print(f"Warning: Could not load sprite for {monster_type}: {e}")
                 
@@ -151,22 +129,14 @@ class GameRenderer:
         try:
             music_path = self.assets_path / "music"
             
-
-            if (music_path / "eating.mp3").exists():
-                self.sound_eating_base = pygame.mixer.Sound(str(music_path / "eating.mp3"))
-                # Create multiple pitch variations of the eating sound
-                self.sound_eating_variations = [self.sound_eating_base]
-                # For now, we'll use the base sound and vary volume/timing
-                self.sound_eating = self.sound_eating_base
             if (music_path / "game-over.mp3").exists():
                 self.sound_game_over = pygame.mixer.Sound(str(music_path / "game-over.mp3"))
             if (music_path / "background.mp3").exists():
                 self.sound_background = str(music_path / "background.mp3")
-                # Start background music (looping)
                 try:
                     pygame.mixer.music.load(self.sound_background)
-                    pygame.mixer.music.set_volume(0.5)  # Set volume to 50%
-                    pygame.mixer.music.play(-1)  # -1 means loop indefinitely
+                    pygame.mixer.music.set_volume(0.5)
+                    pygame.mixer.music.play(-1)
                     self.background_playing = True
                 except Exception as e:
                     print(f"Warning: Could not play background music: {e}")
@@ -174,34 +144,10 @@ class GameRenderer:
         except Exception as e:
             print(f"Warning: Could not load some sound files: {e}")
     
-    def play_sound_eating(self):
-        """Play the eating sound effect with random pitch variation."""
-        if self.sound_eating:
-            try:
-                # Get a channel to play the sound (force if needed)
-                channel = pygame.mixer.find_channel(True)
-                if channel:
-                    # Random pitch variation through volume (0.5 to 1.0)
-                    # Higher volume creates perceptual pitch variation
-                    volume_variation = random.uniform(0.5, 1.0)
-                    
-                    # Set volume on the sound object
-                    self.sound_eating.set_volume(volume_variation)
-                    
-                    # Play the sound
-                    channel.play(self.sound_eating)
-                    
-                    # Vary channel volume as well for additional variation (0.7 to 1.0)
-                    channel.set_volume(random.uniform(0.7, 1.0))
-            except Exception:
-                # Silently fail if sound can't play
-                pass
-    
     def play_sound_game_over(self):
         """Play the game over sound effect."""
         if self.sound_game_over:
             try:
-                # Stop background music
                 pygame.mixer.music.stop()
                 self.background_playing = False
                 self.sound_game_over.play()
@@ -210,37 +156,19 @@ class GameRenderer:
     
     def _check_and_play_sounds(self, state_dict: Dict[str, Any], info: Dict[str, Any] = None):
         """Check game state for events and play appropriate sounds."""
-        # Skip sound effects if disabled (but background music still plays)
         if not self.enable_sound_effects:
             return
         
-        monsters = state_dict.get('monsters', [])
         done = state_dict.get('done', False)
-        
-        # Check for monsters being eaten using score tracking
-        # Since a new monster spawns immediately, the count stays the same
-        # So we check the score which increases by 1 for each monster eaten
-        current_score = state_dict.get('score', 0)
-        if current_score > self.prev_score:
-            # Score increased - a monster was eaten
-            # Play eating sound for each point increase
-            num_eaten = current_score - self.prev_score
-            for _ in range(num_eaten):
-                self.play_sound_eating()
-            self.prev_score = current_score
         
         # Check for game over
         if done and not self.prev_done:
-            # Game just ended - play game over sound
             self.play_sound_game_over()
         
-        # Update previous state
         self.prev_done = done
     
     def reset_state_tracking(self):
         """Reset state tracking (call when game resets)."""
-        self.prev_monster_count = 0
-        self.prev_score = 0
         self.prev_done = False
         
         # Restart background music if it stopped
@@ -260,10 +188,9 @@ class GameRenderer:
         
         Args:
             state_dict: Dictionary containing game state
-            info: Optional info dictionary from game.step() with events like monsters_eaten
+            info: Optional info dictionary from game.step()
             skip_sound_check: If True, skip sound checking for faster rendering
         """
-        # Check for events and play sounds (skip in fast mode)
         if not skip_sound_check:
             self._check_and_play_sounds(state_dict, info)
         
@@ -277,49 +204,35 @@ class GameRenderer:
             pygame.draw.line(self.screen, self.GRID_LINES, 
                            (0, y), (self.window_width, y))
         
-        # Update animation frame for monsters
-        current_time = time.time()
-        if current_time - self.last_animation_time >= self.animation_speed:
-            self.animation_frame = (self.animation_frame + 1) % 1000  # Cycle through frames
-            self.last_animation_time = current_time
+        # Draw walls
+        walls = state_dict.get('walls', set())
+        for wall_pos in walls:
+            self._draw_cell(wall_pos, self.WALL)
         
-        # Draw monsters with animation
-        for monster in state_dict.get('monsters', []):
-            pos = monster.get_position()
-            monster_type = getattr(monster, 'monster_type', None)
-            
-            if monster_type and monster_type in self.monster_sprites:
-                frames = self.monster_sprites[monster_type]
-                # Cycle through frames based on animation_frame
-                frame_index = (self.animation_frame // 2) % len(frames)  # Slow down animation
-                monster_img = frames[frame_index]
-                self._draw_cell(pos, self.MONSTER, monster_img)
+        # Draw falling objects and warnings
+        falling_objects = state_dict.get('falling_objects', [])
+        warning_steps = state_dict.get('warning_steps', 2)
+        
+        for x, y, steps_until_fall in falling_objects:
+            if steps_until_fall == 2:
+                # 2 step warning - show at landing position
+                self._draw_cell((x, y), self.WARNING_2_STEPS)
+            elif steps_until_fall == 1:
+                # 1 step warning - show at landing position
+                self._draw_cell((x, y), self.WARNING_1_STEP)
             else:
-                # Fallback to colored rectangle
-                self._draw_cell(pos, self.MONSTER)
+                # Landing this step - show at landing position
+                self._draw_cell((x, y), self.FALLING_OBJECT)
         
-        # Draw snake
-        snake = state_dict.get('snake')
-        if snake and snake.body:
-            # Draw body segments
-            for i, pos in enumerate(snake.body):
-                if i == 0:
-                    # Head
-                    self._draw_cell(pos, self.SNAKE_HEAD, self.snake_head_img)
-                elif i == len(snake.body) - 1:
-                    # Tail
-                    self._draw_cell(pos, self.SNAKE_BODY, self.snake_tail_img)
-                else:
-                    # Body
-                    self._draw_cell(pos, self.SNAKE_BODY, self.snake_body_img)
+        # Draw player
+        player = state_dict.get('player')
+        if player:
+            pos = player.get_position()
+            self._draw_cell(pos, self.PLAYER, self.player_img)
         
         pygame.display.flip()
-        # Only limit FPS if we're in interactive mode (player mode)
-        # In agent mode with rendering, we can go faster
-        # Check if we should skip FPS limiting (for fast agent mode)
         if hasattr(self, 'limit_fps') and self.limit_fps:
             self.clock.tick(self.fps)
-        # In agent mode, don't limit FPS - let it run as fast as possible
     
     def _draw_cell(self, pos: tuple, color: tuple, image: Optional[pygame.Surface] = None):
         """Draw a cell at the given grid position."""
@@ -337,7 +250,7 @@ class GameRenderer:
         Handle pygame events and return action if any.
         
         Returns:
-            Action code (0-5) or None if no action
+            Action code (0-3) or None if no action
         """
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -355,18 +268,15 @@ class GameRenderer:
                     return 'reset'
         return None
     
-    def render_game_over(self, score: int, steps: int, snake_length: int):
+    def render_game_over(self, score: int, steps: int):
         """
         Render a game over screen.
         
         Args:
             score: Final score
             steps: Number of steps taken
-            snake_length: Final snake length
         """
-        # First check if we need to play game over sound (one-time only)
-        # Create a minimal state dict for sound checking
-        state_dict = {'done': True, 'monsters': []}
+        state_dict = {'done': True}
         self._check_and_play_sounds(state_dict)
         
         # Darken the screen with a semi-transparent overlay
@@ -381,7 +291,6 @@ class GameRenderer:
             font_medium = pygame.font.Font(None, 36)
             font_small = pygame.font.Font(None, 24)
         except:
-            # Fallback if font loading fails
             font_large = pygame.font.SysFont('Arial', 72)
             font_medium = pygame.font.SysFont('Arial', 36)
             font_small = pygame.font.SysFont('Arial', 24)
@@ -400,20 +309,15 @@ class GameRenderer:
         steps_rect = steps_text.get_rect(center=(self.window_width // 2, self.window_height // 2 + 20))
         self.screen.blit(steps_text, steps_rect)
         
-        snake_length_text = font_medium.render(f"Snake Length: {snake_length}", True, (255, 255, 255))
-        snake_length_rect = snake_length_text.get_rect(center=(self.window_width // 2, self.window_height // 2 + 60))
-        self.screen.blit(snake_length_text, snake_length_rect)
-        
         # Instructions
         restart_text = font_small.render("Press R to restart or ESC to quit", True, (200, 200, 200))
-        restart_rect = restart_text.get_rect(center=(self.window_width // 2, self.window_height // 2 + 120))
+        restart_rect = restart_text.get_rect(center=(self.window_width // 2, self.window_height // 2 + 80))
         self.screen.blit(restart_text, restart_rect)
         
         pygame.display.flip()
     
     def close(self):
         """Close the renderer and pygame."""
-        # Stop all sounds
         pygame.mixer.music.stop()
         pygame.mixer.quit()
         pygame.quit()

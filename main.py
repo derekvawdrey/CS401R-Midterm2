@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Main entry point for the move-based Snake game.
+Main entry point for the falling objects avoidance game.
 Supports both player mode and agent mode.
 """
 
@@ -12,20 +12,21 @@ from typing import Optional
 # Add the move-based-snake directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'move-based-snake'))
 
-from game import MoveBasedSnakeGame
+from game import FallingObjectsGame
 from renderer import GameRenderer
 
 
-def play_player_mode(game: MoveBasedSnakeGame, renderer: GameRenderer):
+def play_player_mode(game: FallingObjectsGame, renderer: GameRenderer):
     """Run the game in player mode (keyboard controls)."""
     state = game.reset()
-    renderer.reset_state_tracking()  # Initialize state tracking
+    renderer.reset_state_tracking()
     
     print("Controls:")
     print("  Arrow Keys or WASD: Move")
-    print("  Space: Detach tail (convert to wall)")
     print("  R: Reset game")
     print("  ESC or Close window: Quit")
+    print("\nAvoid falling objects! You get a 2-step warning before objects fall.")
+    print("Falling objects create walls that you cannot walk through.")
     
     running = True
     game_over = False
@@ -38,47 +39,36 @@ def play_player_mode(game: MoveBasedSnakeGame, renderer: GameRenderer):
             break
         elif action == 'reset':
             state = game.reset()
-            renderer.reset_state_tracking()  # Reset sound tracking
+            renderer.reset_state_tracking()
             game_over = False
             print("Game reset!")
             continue
         
         if not game_over:
-            # Game is still running
             if action is not None:
-                # Perform action
                 state, reward, done, info = game.step(action)
                 
                 if done:
                     game_over = True
-                    # Check for sounds one more time (including game over sound)
                     renderer._check_and_play_sounds(game.get_state_dict())
-                    # Render game over screen
                     renderer.render_game_over(
                         score=info.get('score', 0),
-                        steps=info.get('steps', 0),
-                        snake_length=info.get('snake_length', 0)
+                        steps=info.get('steps', 0)
                     )
                 else:
-                    # Render normal game state (pass info for sound detection)
                     renderer.render(game.get_state_dict(), info)
-                    # Small status update every 50 steps
                     if info.get('steps', 0) % 50 == 0:
-                        print(f"Steps: {info['steps']}, Snake Length: {info['snake_length']}")
+                        print(f"Steps: {info['steps']}, Walls: {info.get('walls_count', 0)}")
             else:
-                # No action, render current state
                 renderer.render(game.get_state_dict())
         else:
-            # Game is over, show game over screen
-            # Keep rendering game over screen until reset or quit
             renderer.render_game_over(
                 score=game.score,
-                steps=game.steps,
-                snake_length=len(game.snake.body) if game.snake else 0
+                steps=game.steps
             )
 
 
-def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer], 
+def play_agent_mode(game: FallingObjectsGame, renderer: Optional[GameRenderer], 
                     agent, max_steps: int = 1000, render: bool = True, auto_restart: bool = True,
                     debug: bool = False):
     """
@@ -94,7 +84,7 @@ def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer],
     """
     episode_count = 0
     
-    while True:  # Loop for multiple episodes
+    while True:
         state = game.reset()
         if renderer:
             renderer.reset_state_tracking()
@@ -106,7 +96,6 @@ def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer],
             renderer.render(game.get_state_dict())
         
         while not game.done and step_count < max_steps:
-            # Get action from agent
             if hasattr(agent, 'predict'):
                 action = agent.predict(state, debug=(debug and step_count < 10))
             elif hasattr(agent, 'act'):
@@ -120,14 +109,11 @@ def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer],
                 action_names = ['UP', 'RIGHT', 'DOWN', 'LEFT']
                 print(f"Step {step_count}: Action = {action} ({action_names[action] if 0 <= action < 4 else 'INVALID'})")
             
-            # Perform action
             state, reward, done, info = game.step(action)
             total_reward += reward
             step_count += 1
             
-            # Render if enabled (but limit event checking for speed)
             if render and renderer:
-                # Only check events occasionally (every 100 steps) to avoid slowdown
                 if step_count % 100 == 0:
                     render_event = renderer.handle_events()
                     if render_event == 'quit':
@@ -135,10 +121,8 @@ def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer],
                             'total_reward': total_reward,
                             'steps': step_count,
                             'score': game.score,
-                            'snake_length': len(game.snake.body) if game.snake else 0,
                             'episode': episode_count
                         }
-                # Skip sound checking every step for speed (sounds still work)
                 skip_sound = (step_count % 10 != 0)
                 renderer.render(game.get_state_dict(), info, skip_sound_check=skip_sound)
         
@@ -147,16 +131,11 @@ def play_agent_mode(game: MoveBasedSnakeGame, renderer: Optional[GameRenderer],
             'total_reward': total_reward,
             'steps': step_count,
             'score': game.score,
-            'snake_length': len(game.snake.body) if game.snake else 0,
             'episode': episode_count
         }
         
         if not auto_restart:
             return result
-        
-        # Auto-restart for next episode - continue loop immediately
-        # No delay in agent mode for maximum speed
-        # Continue to next episode (loop will restart at the top)
 
 
 class RandomAgent:
@@ -171,15 +150,15 @@ class RandomAgent:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Move-based Snake Game')
+    parser = argparse.ArgumentParser(description='Falling Objects Avoidance Game')
     parser.add_argument('--mode', choices=['player', 'agent'], default='player',
                        help='Game mode: player (keyboard) or agent (RL)')
     parser.add_argument('--width', type=int, default=20,
                        help='Grid width (default: 20)')
     parser.add_argument('--height', type=int, default=20,
                        help='Grid height (default: 20)')
-    parser.add_argument('--monsters', type=int, default=3,
-                       help='Number of monsters (default: 3)')
+    parser.add_argument('--fall-prob', type=float, default=0.1,
+                       help='Probability of spawning a falling object each step (default: 0.1)')
     parser.add_argument('--no-render', action='store_true',
                        help='Disable rendering (for agent mode)')
     parser.add_argument('--random-agent', action='store_true',
@@ -188,18 +167,19 @@ def main():
                        help='Path to a trained DQN model to use')
     parser.add_argument('--max-steps', type=int, default=1000,
                        help='Maximum steps per episode (default: 1000)')
-    parser.add_argument('--no-monster-movement', action='store_true',
-                       help='Disable monster movement (monsters stay in place)')
     parser.add_argument('--no-danger-signals', action='store_true',
                        help='Disable danger signals in observation')
     parser.add_argument('--enable-danger-signals', action='store_true',
                        help='Enable danger signals in observation (overrides training_options.py)')
     parser.add_argument('--debug-agent', action='store_true',
                        help='Print Q-values and actions for debugging')
+    parser.add_argument('--no-loop', action='store_true',
+                       help='Run only one episode and exit (disable auto-restart)')
+    parser.add_argument('--wrap-boundaries', action='store_true',
+                       help='Enable boundary wrapping (player wraps around screen edges)')
     
     args = parser.parse_args()
     
-    # Determine danger signals setting (command line overrides config file)
     enable_danger = None
     if args.enable_danger_signals:
         enable_danger = True
@@ -207,12 +187,12 @@ def main():
         enable_danger = False
     
     # Create game
-    game = MoveBasedSnakeGame(
+    game = FallingObjectsGame(
         grid_width=args.width,
         grid_height=args.height,
-        num_monsters=args.monsters,
-        monsters_move=not args.no_monster_movement,
-        enable_danger_signals=enable_danger
+        fall_probability=args.fall_prob,
+        enable_danger_signals=enable_danger,
+        wrap_boundaries=args.wrap_boundaries
     )
     
     # Create renderer if needed
@@ -222,9 +202,9 @@ def main():
             grid_width=args.width,
             grid_height=args.height,
             cell_size=30,
-            fps=10 if args.mode == 'player' else 60,  # Higher FPS for agent mode
-            limit_fps=(args.mode == 'player'),  # Only limit FPS in player mode
-            enable_sound_effects=(args.mode == 'player')  # Only sound effects in player mode
+            fps=10 if args.mode == 'player' else 60,
+            limit_fps=(args.mode == 'player'),
+            enable_sound_effects=(args.mode == 'player')
         )
     
     # Run game
@@ -237,50 +217,51 @@ def main():
             if renderer:
                 renderer.close()
     else:  # agent mode
-        # Create agent
         if args.random_agent:
             agent = RandomAgent(game.action_space_size)
         elif args.dqn_model:
-            # Load DQN agent
             try:
-                from agents.dqn_agent import SnakeDQNAgent
+                from agents.dqn_agent import FallingObjectsDQNAgent
                 print(f"Loading DQN agent from {args.dqn_model}")
-                agent = SnakeDQNAgent(game, model_path=args.dqn_model)
+                agent = FallingObjectsDQNAgent(game, model_path=args.dqn_model)
                 print("DQN agent loaded successfully!")
             except Exception as e:
                 print(f"Error loading DQN agent: {e}")
                 print("Falling back to random agent.")
                 agent = RandomAgent(game.action_space_size)
         else:
-            # Try to load agent from trainer
-            try:
-                # User can provide their own agent here
-                print("No agent provided. Using random agent. Use --dqn-model to load a trained DQN.")
-                agent = RandomAgent(game.action_space_size)
-            except Exception as e:
-                print(f"Error loading agent: {e}. Using random agent.")
-                agent = RandomAgent(game.action_space_size)
+            print("No agent provided. Using random agent. Use --dqn-model to load a trained DQN.")
+            agent = RandomAgent(game.action_space_size)
         
-        # Run episodes with auto-restart
         try:
-            while True:
+            if args.no_loop:
                 result = play_agent_mode(
                     game, renderer, agent,
                     max_steps=args.max_steps,
                     render=not args.no_render,
-                    auto_restart=True,
+                    auto_restart=False,
                     debug=args.debug_agent
                 )
-                
-                # If auto_restart is True, play_agent_mode will loop internally
-                # This break will only happen if user quits or auto_restart=False
                 if result:
-                    print(f"Episode {result.get('episode', 1)} finished:")
+                    print(f"Episode finished:")
                     print(f"  Total Reward: {result['total_reward']:.2f}")
                     print(f"  Steps: {result['steps']}")
                     print(f"  Score: {result['score']}")
-                    print(f"  Snake Length: {result['snake_length']}")
-                    break
+            else:
+                while True:
+                    result = play_agent_mode(
+                        game, renderer, agent,
+                        max_steps=args.max_steps,
+                        render=not args.no_render,
+                        auto_restart=True,
+                        debug=args.debug_agent
+                    )
+                    if result:
+                        print(f"Episode {result.get('episode', 1)} finished:")
+                        print(f"  Total Reward: {result['total_reward']:.2f}")
+                        print(f"  Steps: {result['steps']}")
+                        print(f"  Score: {result['score']}")
+                        break
         except KeyboardInterrupt:
             print("\nAgent mode interrupted.")
         finally:
@@ -290,4 +271,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

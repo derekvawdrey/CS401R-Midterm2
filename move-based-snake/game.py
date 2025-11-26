@@ -1,5 +1,5 @@
 """
-Main game environment for the move-based Snake game.
+Main game environment for the falling objects avoidance game.
 Supports both player control and agent control for RL training.
 """
 
@@ -8,65 +8,68 @@ import random
 import numpy as np
 
 try:
-    from .snake import Snake
-    from .monsters.base_monster import Monster
-    from .training_options import COLLISION_REWARD, EAT_MONSTER_REWARD, SURVIVAL_REWARD, ENABLE_DANGER_SIGNALS
+    from .player import Player
+    from .training_options import COLLISION_REWARD, SURVIVAL_REWARD, ENABLE_DANGER_SIGNALS
 except ImportError:
-    from snake import Snake
-    from monsters.base_monster import Monster
-    from training_options import COLLISION_REWARD, EAT_MONSTER_REWARD, SURVIVAL_REWARD, ENABLE_DANGER_SIGNALS
+    from player import Player
+    from training_options import COLLISION_REWARD, SURVIVAL_REWARD, ENABLE_DANGER_SIGNALS
 
-class MoveBasedSnakeGame:
+class FallingObjectsGame:
     """
-    Move-based Snake game environment.
+    Falling objects avoidance game environment.
     
     Actions:
         0: UP
         1: RIGHT
         2: DOWN
         3: LEFT
+        4: STAY (no movement)
     """
     
     ACTIONS = {
-        0: Snake.UP,
-        1: Snake.RIGHT, 
-        2: Snake.DOWN,
-        3: Snake.LEFT,
+        0: Player.UP,
+        1: Player.RIGHT, 
+        2: Player.DOWN,
+        3: Player.LEFT,
+        4: None,  # STAY - no movement
     }
     
     def __init__(self, grid_width: int = 20, grid_height: int = 20,
-                 num_monsters: int = 3, snake_start_length: int = 3,
-                 monster_avoidance_prob: float = 0.8, monsters_move: bool = True,
-                 enable_danger_signals: bool = None):
+                 fall_probability: float = 0.1, warning_steps: int = 2,
+                 enable_danger_signals: bool = None, wrap_boundaries: bool = False):
         """
         Initialize the game.
         
         Args:
             grid_width: Width of the game grid
             grid_height: Height of the game grid
-            num_monsters: Number of monsters in the game
-            snake_start_length: Initial length of the snake
-            monster_avoidance_prob: Probability monsters use avoidance behavior
-            monsters_move: Whether monsters should move each step (default: True)
+            fall_probability: Probability of spawning a new falling object each step
+            warning_steps: Number of steps before an object falls (default: 2)
             enable_danger_signals: Whether to include danger signals in observation.
                                   If None, uses ENABLE_DANGER_SIGNALS from training_options
+            wrap_boundaries: Whether player wraps around boundaries (default: False)
         """
         self.grid_width = grid_width
         self.grid_height = grid_height
-        self.num_monsters = num_monsters
-        self.snake_start_length = snake_start_length
-        self.monster_avoidance_prob = monster_avoidance_prob
-        self.monsters_move = monsters_move
+        self.fall_probability = fall_probability
+        self.warning_steps = warning_steps
         self.enable_danger_signals = enable_danger_signals if enable_danger_signals is not None else ENABLE_DANGER_SIGNALS
+        self.wrap_boundaries = wrap_boundaries
         
-        self.snake: Optional[Snake] = None
-        self.monsters: List[Monster] = []
+        self.player: Optional[Player] = None
+        # Falling objects: list of (x, y, steps_until_fall)
+        # (x, y): landing position where object will appear
+        # steps_until_fall: countdown until object lands (0 = lands this step)
+        self.falling_objects: List[Tuple[int, int, int]] = []  # (x, y, steps_until_fall)
+        # Walls: set of (x, y) positions that are blocked
+        self.walls: Set[Tuple[int, int]] = set()
+        
         self.steps = 0
         self.done = False
         self.score = 0
         
-        # Action space size
-        self.action_space_size = 4
+        # Action space size (including STAY)
+        self.action_space_size = 5
         
     def reset(self) -> np.ndarray:
         """
@@ -79,53 +82,38 @@ class MoveBasedSnakeGame:
         self.done = False
         self.score = 0
         
-        # Initialize snake in center
+        # Initialize player in center
         start_pos = (self.grid_width // 2, self.grid_height // 2)
-        self.snake = Snake(start_pos, self.snake_start_length, Snake.RIGHT)
+        self.player = Player(start_pos, Player.RIGHT)
         
-        # Initialize monsters at random positions
-        self.monsters = []
-        occupied = self.snake.get_all_positions()
-        
-        # Available monster types
-        monster_types = [
-            "Blinded Grimlock", "Bloodshot Eye", "Brawny Ogre", "Crimson Slaad",
-            "Crushing Cyclops", "Death Slime", "Fungal Myconid", "Humongous Ettin",
-            "Murky Slaad", "Ochre Jelly", "Ocular Watcher", "Red Cap",
-            "Shrieker Mushroom", "Stone Troll", "Swamp Troll"
-        ]
-        
-        for i in range(self.num_monsters):
-            pos = self._get_random_empty_position(occupied)
-            if pos is not None:
-                monster_type = monster_types[i % len(monster_types)]  # Cycle through types
-                monster = Monster(pos, self.monster_avoidance_prob, monster_type)
-                self.monsters.append(monster)
-                occupied.add(pos)
+        # Clear falling objects and walls
+        self.falling_objects = []
+        self.walls = set()
         
         return self._get_observation()
     
-    def _spawn_monster(self):
-        """Spawn a new monster at a random empty position."""
-        # Get all occupied positions
-        occupied = self.snake.get_all_positions()
-        occupied.update({m.get_position() for m in self.monsters})
+    def _spawn_falling_object(self):
+        """Spawn a new falling object warning at a random position on the board every step."""
+        # Choose a random position on the board
+        x = random.randint(0, self.grid_width - 1)
+        y = random.randint(0, self.grid_height - 1)
         
-        # Available monster types
-        monster_types = [
-            "Blinded Grimlock", "Bloodshot Eye", "Brawny Ogre", "Crimson Slaad",
-            "Crushing Cyclops", "Death Slime", "Fungal Myconid", "Humongous Ettin",
-            "Murky Slaad", "Ochre Jelly", "Ocular Watcher", "Red Cap",
-            "Shrieker Mushroom", "Stone Troll", "Swamp Troll"
-        ]
+        # Don't spawn on top of existing walls or other falling objects
+        occupied = self.walls.copy()
+        occupied.update({(fx, fy) for fx, fy, _ in self.falling_objects})
         
-        # Find an empty position
-        pos = self._get_random_empty_position(occupied)
-        if pos is not None:
-            # Randomly select a monster type
-            monster_type = random.choice(monster_types)
-            monster = Monster(pos, self.monster_avoidance_prob, monster_type)
-            self.monsters.append(monster)
+        # Try to find an empty position (with more attempts since we need one every step)
+        attempts = 0
+        max_attempts = 50  # More attempts since we must find a position
+        while (x, y) in occupied and attempts < max_attempts:
+            x = random.randint(0, self.grid_width - 1)
+            y = random.randint(0, self.grid_height - 1)
+            attempts += 1
+        
+        # Add if we found a valid position (or if board is mostly full, add anyway)
+        if (x, y) not in occupied or attempts >= max_attempts:
+            # Add with warning_steps countdown (object will land at this position)
+            self.falling_objects.append((x, y, self.warning_steps))
     
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
         """
@@ -147,115 +135,86 @@ class MoveBasedSnakeGame:
         reward = 0.0
         info = {'steps': self.steps, 'score': self.score}
         
-        # Handle action
-        if 0 <= action <= 3:  # Movement action
+        # Handle player action
+        if action == 4:  # STAY - no movement
+            # Player stays in place, just continue
+            pass
+        elif 0 <= action <= 3:  # Movement action
             direction = self.ACTIONS[action]
-            self.snake.set_direction(direction)
-            old_tail = self.snake.move(grow=False, 
-                                      grid_width=self.grid_width, 
-                                      grid_height=self.grid_height)
+            self.player.set_direction(direction)
             
-            # Check collision with walls/boundaries/self
-            if self.snake.check_collision(self.grid_width, self.grid_height):
+            # Calculate where player wants to move
+            new_pos = (self.player.pos[0] + direction[0], 
+                      self.player.pos[1] + direction[1])
+            
+            # Check if new position is a wall
+            if new_pos in self.walls:
+                # Hit a wall - game over
                 self.done = True
                 reward = COLLISION_REWARD
-                info['reason'] = 'collision'
-                info['snake_length'] = len(self.snake.body)
+                info['reason'] = 'wall_collision'
                 return self._get_observation(), reward, True, info
             
-            # Check collision with monsters (eat them!)
-            snake_head = self.snake.get_head()
-            eaten_monsters = []
-            for monster in self.monsters:
-                if monster.get_position() == snake_head:
-                    eaten_monsters.append(monster)
-            
-            # Eat monsters - snake grows and monsters are removed
-            for monster in eaten_monsters:
-                self.monsters.remove(monster)
-                # Grow the snake by adding a segment at the tail
-                self.snake.grow()
-                reward += EAT_MONSTER_REWARD  # Reward for eating a monster
-                self.score += 1
-                
-                # Spawn a new monster at a random empty position
-                self._spawn_monster()
-            
-            if eaten_monsters:
-                info['monsters_eaten'] = len(eaten_monsters)
+            # Try to move
+            moved = self.player.move(self.grid_width, self.grid_height, 
+                                   wrap_boundaries=self.wrap_boundaries)
+            if not moved and not self.wrap_boundaries:
+                # Hit boundary
+                self.done = True
+                reward = COLLISION_REWARD
+                info['reason'] = 'boundary_collision'
+                return self._get_observation(), reward, True, info
         
-        # Move monsters (they all move simultaneously based on current state)
-        if self.monsters_move:
-            snake_head = self.snake.get_head()
-            snake_body = self.snake.get_all_positions()
-            monster_positions = {m.get_position() for m in self.monsters}
-            
-            # Calculate all monster moves first
-            monster_moves = []
-            for monster in self.monsters:
-                direction = monster.choose_direction(
-                    snake_head, snake_body, monster_positions,
-                    self.grid_width, self.grid_height
-                )
-                monster_moves.append((monster, direction))
-            
-            # Execute moves, preventing collisions between monsters
-            # Track which positions will be occupied after all moves
-            occupied_positions = set()  # Positions that will be occupied after moves
-            
-            # First pass: calculate all planned positions
-            planned_positions = {}
-            for monster, direction in monster_moves:
-                if direction is not None:
-                    new_pos = (monster.pos[0] + direction[0], monster.pos[1] + direction[1])
-                    if new_pos not in planned_positions:
-                        planned_positions[new_pos] = []
-                    planned_positions[new_pos].append(monster)
-                else:
-                    # Monster staying in place
-                    if monster.pos not in planned_positions:
-                        planned_positions[monster.pos] = []
-                    planned_positions[monster.pos].append(monster)
-            
-            # Second pass: execute moves, preventing collisions
-            for monster, direction in monster_moves:
-                if direction is not None:
-                    new_pos = (monster.pos[0] + direction[0], monster.pos[1] + direction[1])
-                    
-                    # Check if this position is already occupied or will be by another monster
-                    if new_pos in occupied_positions:
-                        # Position already taken, monster stays in place
-                        occupied_positions.add(monster.pos)  # Current position stays occupied
-                        continue
-                    
-                    # Check if multiple monsters want this position
-                    if new_pos in planned_positions and len(planned_positions[new_pos]) > 1:
-                        # Multiple monsters want same position - only first one in list moves
-                        if planned_positions[new_pos][0] != monster:
-                            # Not first monster, stay in place
-                            occupied_positions.add(monster.pos)
-                            continue
-                    
-                    # Safe to move
-                    occupied_positions.add(new_pos)
-                    monster.move(direction)
-                else:
-                    # Monster staying in place
-                    occupied_positions.add(monster.pos)
+        # Update falling objects
+        # First, spawn new objects
+        self._spawn_falling_object()
+        
+        # Update existing falling objects
+        new_falling_objects = []
+        
+        for x, y, steps_until_fall in self.falling_objects:
+            if steps_until_fall > 0:
+                # Still in warning phase - countdown continues
+                new_falling_objects.append((x, y, steps_until_fall - 1))
+            else:
+                # Object lands this step - check if it hits the player or creates a wall
+                player_pos = self.player.get_position()
+                
+                # Check if player is at the landing position
+                if player_pos[0] == x and player_pos[1] == y:
+                    # Player is hit by falling object
+                    self.done = True
+                    reward = COLLISION_REWARD
+                    info['reason'] = 'hit_by_falling_object'
+                    return self._get_observation(), reward, True, info
+                
+                # Object lands and creates a wall at (x, y)
+                self.walls.add((x, y))
+        
+        self.falling_objects = new_falling_objects
+        
+        # Check if player is standing on a wall (shouldn't happen, but safety check)
+        if self.player.get_position() in self.walls:
+            self.done = True
+            reward = COLLISION_REWARD
+            info['reason'] = 'standing_on_wall'
+            return self._get_observation(), reward, True, info
         
         # Small survival reward
         reward += SURVIVAL_REWARD
+        self.score = self.steps  # Score is just survival time
         
-        info['snake_length'] = len(self.snake.body) if self.snake else 0
+        info['walls_count'] = len(self.walls)
+        info['falling_objects_count'] = len(self.falling_objects)
         
         return self._get_observation(), reward, self.done, info
     
     def _get_relative_directions(self, current_dir: Tuple[int, int]) -> Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]:
         """
-        Get left, forward, and right directions relative to the snake's current direction.
+        Get left, forward, and right directions relative to the player's current direction.
         
         Args:
-            current_dir: Current direction of the snake
+            current_dir: Current direction of the player
             
         Returns:
             Tuple of (left_dir, forward_dir, right_dir)
@@ -270,32 +229,30 @@ class MoveBasedSnakeGame:
         
         return left, forward, right
     
-    def _check_danger_at_position(self, pos: Tuple[int, int], exclude_tail: bool = False) -> bool:
+    def _check_danger_at_position(self, pos: Tuple[int, int]) -> bool:
         """
-        Check if a position is dangerous (contains snake body).
-        Since the snake wraps around boundaries, we wrap the position first.
+        Check if a position is dangerous (wall or out of bounds).
         
         Args:
             pos: Position to check
-            exclude_tail: If True, exclude the tail from danger check (for forward movement)
             
         Returns:
             True if position is dangerous, False otherwise
         """
-        # Wrap position (snake wraps around boundaries)
-        wrapped_pos = (pos[0] % self.grid_width, pos[1] % self.grid_height)
+        # Check boundary collision if not wrapping
+        if not self.wrap_boundaries:
+            if pos[0] < 0 or pos[0] >= self.grid_width or pos[1] < 0 or pos[1] >= self.grid_height:
+                return True
         
-        # Check if position contains snake body
-        if self.snake is not None:
-            if exclude_tail and len(self.snake.body) > 1:
-                # Exclude tail since it will move when snake moves forward
-                body_without_tail = set(self.snake.body[:-1])
-                if wrapped_pos in body_without_tail:
-                    return True
-            else:
-                # Check all body positions
-                snake_body = self.snake.get_all_positions()
-                if wrapped_pos in snake_body:
+        # Check if position is a wall
+        if pos in self.walls:
+            return True
+        
+        # Check if a falling object will land at this position
+        for x, y, steps_until_fall in self.falling_objects:
+            if steps_until_fall == 0:
+                # Object lands this step - check if it lands at this position
+                if x == pos[0] and y == pos[1]:
                     return True
         
         return False
@@ -310,30 +267,43 @@ class MoveBasedSnakeGame:
         # Create a grid representation
         grid = np.zeros((self.grid_height, self.grid_width), dtype=np.float32)
         
-        if self.snake is not None:
-            # Snake body = 1.0, head = 2.0
-            for i, pos in enumerate(self.snake.body):
-                # Check bounds before accessing grid
-                if 0 <= pos[0] < self.grid_width and 0 <= pos[1] < self.grid_height:
-                    if i == 0:
-                        grid[pos[1], pos[0]] = 2.0  # Head
-                    else:
-                        grid[pos[1], pos[0]] = 1.0  # Body
-        
-        # Monsters = -1.0
-        for monster in self.monsters:
-            pos = monster.get_position()
+        if self.player is not None:
+            # Player = 2.0
+            pos = self.player.get_position()
             if 0 <= pos[0] < self.grid_width and 0 <= pos[1] < self.grid_height:
-                grid[pos[1], pos[0]] = -1.0
+                grid[pos[1], pos[0]] = 2.0
+        
+        # Walls = -1.0
+        for wall_pos in self.walls:
+            x, y = wall_pos
+            if 0 <= x < self.grid_width and 0 <= y < self.grid_height:
+                grid[y, x] = -1.0
+        
+        # Falling objects: 
+        # - Warning (2 steps away) = 0.5 at landing position
+        # - Warning (1 step away) = 1.0 at landing position
+        # - Landing this step = 1.5 at landing position
+        for x, y, steps_until_fall in self.falling_objects:
+            if 0 <= x < self.grid_width and 0 <= y < self.grid_height:
+                if steps_until_fall == 2:
+                    # 2 steps warning
+                    grid[y, x] = max(grid[y, x], 0.5)
+                elif steps_until_fall == 1:
+                    # 1 step warning
+                    grid[y, x] = max(grid[y, x], 1.0)
+                else:
+                    # Landing this step
+                    grid[y, x] = max(grid[y, x], 1.5)
         
         grid_flat = grid.flatten()
+        observation_parts = [grid_flat]
         
         # Get danger signals (left, forward, right) if enabled
         if self.enable_danger_signals:
             danger_signals = np.zeros(3, dtype=np.float32)
-            if self.snake is not None:
-                head_pos = self.snake.get_head()
-                current_dir = self.snake.direction
+            if self.player is not None:
+                head_pos = self.player.get_position()
+                current_dir = self.player.direction
                 
                 # Get relative directions
                 left_dir, forward_dir, right_dir = self._get_relative_directions(current_dir)
@@ -343,38 +313,25 @@ class MoveBasedSnakeGame:
                 forward_pos = (head_pos[0] + forward_dir[0], head_pos[1] + forward_dir[1])
                 right_pos = (head_pos[0] + right_dir[0], head_pos[1] + right_dir[1])
                 
-                # For forward, exclude tail since it will move; for left/right, check all body
-                danger_signals[0] = 1.0 if self._check_danger_at_position(left_pos, exclude_tail=False) else 0.0
-                danger_signals[1] = 1.0 if self._check_danger_at_position(forward_pos, exclude_tail=True) else 0.0
-                danger_signals[2] = 1.0 if self._check_danger_at_position(right_pos, exclude_tail=False) else 0.0
+                danger_signals[0] = 1.0 if self._check_danger_at_position(left_pos) else 0.0
+                danger_signals[1] = 1.0 if self._check_danger_at_position(forward_pos) else 0.0
+                danger_signals[2] = 1.0 if self._check_danger_at_position(right_pos) else 0.0
             
-            # Concatenate grid with danger signals
-            return np.concatenate([grid_flat, danger_signals])
-        else:
-            # Return just the grid without danger signals
-            return grid_flat
-    
-    def _get_random_empty_position(self, occupied: Set[Tuple[int, int]], 
-                                   max_attempts: int = 100) -> Optional[Tuple[int, int]]:
-        """Get a random position that's not occupied."""
-        attempts = 0
-        while attempts < max_attempts:
-            pos = (random.randint(0, self.grid_width - 1), 
-                   random.randint(0, self.grid_height - 1))
-            if pos not in occupied:
-                return pos
-            attempts += 1
-        return None
+            observation_parts.append(danger_signals)
+        
+        # Concatenate all observation parts
+        return np.concatenate(observation_parts) if len(observation_parts) > 1 else observation_parts[0]
     
     def get_state_dict(self) -> Dict[str, Any]:
         """Get current game state as a dictionary (useful for rendering)."""
         return {
-            'snake': self.snake,
-            'monsters': self.monsters,
+            'player': self.player,
+            'falling_objects': self.falling_objects,
+            'walls': self.walls,
             'grid_width': self.grid_width,
             'grid_height': self.grid_height,
             'steps': self.steps,
             'score': self.score,
-            'done': self.done
+            'done': self.done,
+            'warning_steps': self.warning_steps
         }
-

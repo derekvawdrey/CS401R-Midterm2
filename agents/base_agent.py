@@ -29,7 +29,7 @@ class BaseAgent:
         Initialize the base agent.
         
         Args:
-            game: The game environment (MoveBasedSnakeGame instance)
+            game: The game environment (FallingObjectsGame instance)
         """
         self.game = game
     

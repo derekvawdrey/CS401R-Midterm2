@@ -1,11 +1,17 @@
-# Action-based Snake Game
+# Falling Objects Avoidance Game
 
-In a regular Snake game, the snake automatically moves every frame, whether you take an action or not. In this game, movement is action-based: the snake only moves when you perform an action. Each action advances the game state, rather than the snake moving continuously on its own.
-
-But there’s a twist. Instead of apples, there are monsters. These monsters move around the map and try to avoid you. Their behavior can be partly random, but most of the time they actively attempt to stay away from the snake.
+A reinforcement learning game where you (or an AI agent) play as a monster that must avoid falling objects. Objects fall from the sky, and you get a 2-step warning before they fall. When objects land, they create walls that you cannot walk through. You die if a falling object hits you.
 
 ## The Goal
-Our goal is to train a RL model that will learn to play the game the best it can.
+Our goal is to train a RL model that will learn to play the game the best it can - avoiding falling objects and navigating around walls.
+
+## Game Mechanics
+
+- **Player**: You control a monster that can move in 4 directions (UP, RIGHT, DOWN, LEFT)
+- **Falling Objects**: Objects appear at random positions on the board
+- **Warning System**: Objects show a warning indicator at the landing position 2 steps before they land
+- **Walls**: When objects land, they create permanent walls at that position
+- **Collision**: You die if you're at a position when an object lands on it, or if you try to walk into a wall
 
 ## Running the code
 
@@ -26,15 +32,15 @@ python main.py --mode player
 ```
 
 **Controls:**
-- Arrow Keys or WASD: Move the snake
-- Space: Detach tail segment (convert to wall)
+- Arrow Keys or WASD: Move the player
 - R: Reset the game
 - Close window or ESC: Quit
 
 **Options:**
 - `--width N`: Set grid width (default: 20)
 - `--height N`: Set grid height (default: 20)
-- `--monsters N`: Set number of monsters (default: 3)
+- `--fall-prob FLOAT`: Probability of spawning a falling object each step (default: 0.1)
+- `--wrap-boundaries`: Enable boundary wrapping (player wraps around screen edges)
 
 ### Agent Mode
 
@@ -49,6 +55,7 @@ python main.py --mode agent --random-agent
 - `--dqn-model PATH`: Load a trained DQN model
 - `--no-render`: Disable rendering (faster training)
 - `--max-steps N`: Maximum steps per episode (default: 1000)
+- `--no-loop`: Run only one episode and exit
 
 ### Training Agents
 
@@ -63,7 +70,7 @@ python train_agent.py --agent dqn --episodes 1000
 - `--episodes N`: Number of training episodes (default: 1000)
 - `--width N`: Grid width (default: 20)
 - `--height N`: Grid height (default: 20)
-- `--monsters N`: Number of monsters (default: 3)
+- `--fall-prob FLOAT`: Probability of spawning a falling object each step (default: 0.1)
 - `--render`: Render the game during training (slower)
 - `--load-model PATH`: Load a pre-trained model to continue training
 - `--save-model PATH`: Path to save the trained model (default: agent_model.pth)
@@ -76,6 +83,7 @@ python train_agent.py --agent dqn --episodes 1000
 - `--batch-size N`: Batch size for training (default: 64)
 - `--memory-size N`: Replay buffer size (default: 10000)
 - `--max-steps N`: Maximum steps per episode (default: 1000)
+- `--wrap-boundaries`: Enable boundary wrapping
 
 **Example:**
 ```bash
@@ -127,9 +135,9 @@ Then train it using the general training function:
 
 ```python
 from agents.trainer import train_any_agent
-from game import MoveBasedSnakeGame
+from game import FallingObjectsGame
 
-game = MoveBasedSnakeGame(grid_width=20, grid_height=20, num_monsters=3)
+game = FallingObjectsGame(grid_width=20, grid_height=20, fall_probability=0.1)
 agent = MyAgent(game)
 
 train_any_agent(
@@ -142,22 +150,27 @@ train_any_agent(
 
 ### Game Details
 
-The game supports 4 actions:
+The game supports 5 actions:
 - `0`: UP
 - `1`: RIGHT
 - `2`: DOWN
 - `3`: LEFT
+- `4`: STAY (no movement)
 
 The observation is a flattened grid (width × height) with values:
-- `2.0`: Snake head
-- `1.0`: Snake body
-- `-1.0`: Monster
+- `2.0`: Player position
+- `1.5`: Object landing this step
+- `1.0`: Warning indicator (1 step before landing)
+- `0.5`: Warning indicator (2 steps before landing)
+- `-1.0`: Wall (landed object)
 - `0.0`: Empty cell
 
-Rewards (these can be changed in rewards.py):
-- `-10.0`: Collision (game over)
-- `5.0`: Eating a monster
-- `0.0`: Survival reward per step
+Additional observation features (if enabled):
+- Danger signals: 3 values indicating danger in left, forward, and right directions relative to player's facing direction
+
+Rewards (these can be changed in `move-based-snake/training_options.py`):
+- `-10.0`: Collision (game over - hit by falling object, walked into wall, or hit boundary)
+- `0.1`: Survival reward per step
 
 ## Solution
 The solution is implemented in `agents/solution_model.py`

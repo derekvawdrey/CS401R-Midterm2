@@ -212,6 +212,9 @@ class DQNAgent:
         next_states = torch.FloatTensor(next_states).to(self.device)
         dones = torch.BoolTensor(dones).to(self.device)
         
+        # Set network to train mode
+        self.q_network.train()
+        
         # Current Q values
         q_values = self.q_network(states)
         q_value = q_values.gather(1, actions.unsqueeze(1)).squeeze(1)

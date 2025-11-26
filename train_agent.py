@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-General training script for any agent implementing BaseAgent interface.
+General training script for the Falling Objects avoidance game.
 Supports DQN and can be extended for other agent types.
 """
 
@@ -12,14 +12,14 @@ from typing import Optional
 # Add the move-based-snake directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'move-based-snake'))
 
-from game import MoveBasedSnakeGame
+from game import FallingObjectsGame
 from renderer import GameRenderer
 from agents.trainer import train_any_agent
-from agents.dqn_agent import SnakeDQNAgent
+from agents.dqn_agent import FallingObjectsDQNAgent
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Train any agent for Snake game')
+    parser = argparse.ArgumentParser(description='Train an agent for the Falling Objects avoidance game')
     parser.add_argument('--agent', type=str, default='dqn',
                        choices=['dqn'],
                        help='Agent type to train (default: dqn)')
@@ -29,8 +29,8 @@ def main():
                        help='Grid width (default: 20)')
     parser.add_argument('--height', type=int, default=20,
                        help='Grid height (default: 20)')
-    parser.add_argument('--monsters', type=int, default=3,
-                       help='Number of monsters (default: 3)')
+    parser.add_argument('--fall-prob', type=float, default=0.1,
+                       help='Probability of spawning a falling object each step (default: 0.1)')
     parser.add_argument('--render', action='store_true',
                        help='Render the game during training (slower)')
     parser.add_argument('--load-model', type=str, default=None,
@@ -53,18 +53,19 @@ def main():
                        help='Batch size for training (default: 64)')
     parser.add_argument('--memory-size', type=int, default=10000,
                        help='Replay buffer size (default: 10000)')
+    parser.add_argument('--target-update-freq', type=int, default=100,
+                       help='Frequency (in steps) to update target network (default: 100)')
     parser.add_argument('--max-steps', type=int, default=1000,
                        help='Maximum steps per episode (default: 1000)')
-    parser.add_argument('--no-monster-movement', action='store_true',
-                       help='Disable monster movement (monsters stay in place)')
     parser.add_argument('--no-danger-signals', action='store_true',
                        help='Disable danger signals in observation')
     parser.add_argument('--enable-danger-signals', action='store_true',
                        help='Enable danger signals in observation (overrides training_options.py)')
+    parser.add_argument('--wrap-boundaries', action='store_true',
+                       help='Enable boundary wrapping (player wraps around screen edges)')
     
     args = parser.parse_args()
     
-    # Determine danger signals setting (command line overrides config file)
     enable_danger = None
     if args.enable_danger_signals:
         enable_danger = True
@@ -72,12 +73,12 @@ def main():
         enable_danger = False
     
     # Create game
-    game = MoveBasedSnakeGame(
+    game = FallingObjectsGame(
         grid_width=args.width,
         grid_height=args.height,
-        num_monsters=args.monsters,
-        monsters_move=not args.no_monster_movement,
-        enable_danger_signals=enable_danger
+        fall_probability=args.fall_prob,
+        enable_danger_signals=enable_danger,
+        wrap_boundaries=args.wrap_boundaries
     )
     
     # Create renderer if needed
@@ -94,7 +95,7 @@ def main():
     
     # Create agent based on type
     if args.agent == 'dqn':
-        agent = SnakeDQNAgent(
+        agent = FallingObjectsDQNAgent(
             game=game,
             learning_rate=args.learning_rate,
             gamma=args.gamma,
@@ -103,6 +104,7 @@ def main():
             epsilon_decay=args.epsilon_decay,
             batch_size=args.batch_size,
             memory_size=args.memory_size,
+            target_update_freq=args.target_update_freq,
             model_path=args.load_model
         )
         if args.load_model and hasattr(agent, 'dqn'):
@@ -136,4 +138,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
