@@ -51,8 +51,8 @@ def main():
                        help='Epsilon decay rate (default: 0.995)')
     parser.add_argument('--batch-size', type=int, default=64,
                        help='Batch size for training (default: 64)')
-    parser.add_argument('--memory-size', type=int, default=10000,
-                       help='Replay buffer size (default: 10000)')
+    parser.add_argument('--memory-size', type=int, default=50000,
+                       help='Replay buffer size (default: 50000)')
     parser.add_argument('--target-update-freq', type=int, default=100,
                        help='Frequency (in steps) to update target network (default: 100)')
     parser.add_argument('--max-steps', type=int, default=1000,
