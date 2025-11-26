@@ -250,7 +250,7 @@ class GameRenderer:
         Handle pygame events and return action if any.
         
         Returns:
-            Action code (0-3) or None if no action
+            Action code (0-4) or None if no action
         """
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -264,6 +264,8 @@ class GameRenderer:
                     return 2  # DOWN
                 elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
                     return 3  # LEFT
+                elif event.key == pygame.K_SPACE:
+                    return 4  # STAY
                 elif event.key == pygame.K_r:
                     return 'reset'
         return None

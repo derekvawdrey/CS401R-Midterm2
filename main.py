@@ -23,6 +23,7 @@ def play_player_mode(game: FallingObjectsGame, renderer: GameRenderer):
     
     print("Controls:")
     print("  Arrow Keys or WASD: Move")
+    print("  Space: Stay still (no movement)")
     print("  R: Reset game")
     print("  ESC or Close window: Quit")
     print("\nAvoid falling objects! You get a 2-step warning before objects fall.")
@@ -141,7 +142,7 @@ def play_agent_mode(game: FallingObjectsGame, renderer: Optional[GameRenderer],
 class RandomAgent:
     """Simple random agent for testing."""
     
-    def __init__(self, action_space_size: int = 4):
+    def __init__(self, action_space_size: int = 5):
         self.action_space_size = action_space_size
     
     def predict(self, state):

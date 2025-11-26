@@ -93,14 +93,28 @@ class FallingObjectsGame:
         return self._get_observation()
     
     def _spawn_falling_object(self):
-        """Spawn a new falling object warning at a random position on the board every step."""
-        # Choose a random position on the board
-        x = random.randint(0, self.grid_width - 1)
-        y = random.randint(0, self.grid_height - 1)
+        """Spawn a new falling object warning every step. Sometimes targets the player."""
+        # 40% chance to target the player's position, 60% chance for random position
+        target_player = random.random() < 0.4
+        
+        if target_player and self.player is not None:
+            # Target the player's current position
+            player_pos = self.player.get_position()
+            x, y = player_pos[0], player_pos[1]
+        else:
+            # Choose a random position on the board
+            x = random.randint(0, self.grid_width - 1)
+            y = random.randint(0, self.grid_height - 1)
         
         # Don't spawn on top of existing walls or other falling objects
         occupied = self.walls.copy()
         occupied.update({(fx, fy) for fx, fy, _ in self.falling_objects})
+        
+        # If targeting player but position is occupied, fall back to random
+        if (x, y) in occupied and target_player:
+            # Fall back to random position
+            x = random.randint(0, self.grid_width - 1)
+            y = random.randint(0, self.grid_height - 1)
         
         # Try to find an empty position (with more attempts since we need one every step)
         attempts = 0
