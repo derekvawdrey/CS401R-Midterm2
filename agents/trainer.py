@@ -109,6 +109,9 @@ def train_any_agent(
         avg_loss = total_loss / loss_count if loss_count > 0 else None
         episode_losses.append(avg_loss)
         
+        # Call episode_end callback (for epsilon decay, etc.)
+        agent.episode_end()
+        
         # Print progress
         if verbose and (episode + 1) % 10 == 0:
             avg_reward = sum(episode_rewards[-10:]) / 10

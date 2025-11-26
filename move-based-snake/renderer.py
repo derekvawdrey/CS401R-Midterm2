@@ -54,7 +54,9 @@ class GameRenderer:
         self.WALL = (100, 100, 100)  # Gray for walls
         self.FALLING_OBJECT = (255, 100, 100)  # Red for falling objects
         self.WARNING_2_STEPS = (255, 200, 100)  # Orange for 2-step warning
-        self.WARNING_1_STEP = (255, 150, 50)  # Darker orange for 1-step warning
+        self.WARNING_1_STEP = (255, 150, 50)
+        self.EXPLOSION = (255, 50, 50)  # Bright red for explosions
+        self.EXPLOSION_FADE = (255, 100, 100)  # Lighter red for fading explosions  # Darker orange for 1-step warning
         self.GRID_LINES = (40, 40, 40)
         
         # Animation tracking
@@ -204,7 +206,17 @@ class GameRenderer:
             pygame.draw.line(self.screen, self.GRID_LINES, 
                            (0, y), (self.window_width, y))
         
-        # Draw walls
+        # Draw active explosions (bomb effect)
+        active_explosions = state_dict.get('active_explosions', {})
+        for (exp_x, exp_y), duration in active_explosions.items():
+            # Fade from bright red to lighter red
+            if duration >= 2:
+                color = self.EXPLOSION
+            else:
+                color = self.EXPLOSION_FADE
+            self._draw_cell((exp_x, exp_y), color)
+        
+        # Draw walls (if any - though meteors don't create walls anymore)
         walls = state_dict.get('walls', set())
         for wall_pos in walls:
             self._draw_cell(wall_pos, self.WALL)

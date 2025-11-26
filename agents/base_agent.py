@@ -98,6 +98,14 @@ class BaseAgent:
         # Default: do nothing (for agents that don't train online)
         return None
     
+    def episode_end(self):
+        """
+        Called at the end of each episode (optional, for agents that need episode-level updates).
+        Useful for epsilon decay, logging, etc.
+        """
+        # Default: do nothing
+        pass
+    
     def save(self, filepath: str):
         """
         Save the agent model to a file (optional).

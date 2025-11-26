@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'move-based-snake'))
 from game import FallingObjectsGame
 from renderer import GameRenderer
 from agents.trainer import train_any_agent
-from agents.dqn_agent import FallingObjectsDQNAgent
+from agents.dqn_agent import DQNAgent
 
 
 def main():
@@ -95,7 +95,7 @@ def main():
     
     # Create agent based on type
     if args.agent == 'dqn':
-        agent = FallingObjectsDQNAgent(
+        agent = DQNAgent(
             game=game,
             learning_rate=args.learning_rate,
             gamma=args.gamma,

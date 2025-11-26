@@ -1,17 +1,19 @@
-# Falling Objects Avoidance Game
+# Meteor Explosion Avoidance Game
 
-A reinforcement learning game where you (or an AI agent) play as a monster that must avoid falling objects. Objects fall from the sky, and you get a 2-step warning before they fall. When objects land, they create walls that you cannot walk through. You die if a falling object hits you.
+A reinforcement learning game where you (or an AI agent) play as a monster that must avoid exploding meteors. Meteors fall from the sky, and you get a 2-step warning before they land and explode. When meteors explode, they create a dangerous 3×3 explosion radius. You die if you're caught in the explosion!
 
 ## The Goal
-Our goal is to train a RL model that will learn to play the game the best it can - avoiding falling objects and navigating around walls.
+Our goal is to train a RL model that will learn to play the game the best it can - avoiding meteor explosions and surviving as long as possible.
 
 ## Game Mechanics
 
-- **Player**: You control a monster that can move in 4 directions (UP, RIGHT, DOWN, LEFT)
-- **Falling Objects**: Objects appear at random positions on the board
-- **Warning System**: Objects show a warning indicator at the landing position 2 steps before they land
-- **Walls**: When objects land, they create permanent walls at that position
-- **Collision**: You die if you're at a position when an object lands on it, or if you try to walk into a wall
+- **Player**: You control a monster that can move in 4 directions (UP, RIGHT, DOWN, LEFT) or stay in place
+- **Meteors**: Meteors appear at random positions on the board (40% chance to target your current position)
+- **Warning System**: Meteors show a warning indicator at the landing position 2 steps before they explode
+- **Explosion System**: When meteors land, they explode in a 3×3 radius (center + 8 adjacent cells)
+- **Explosion Effect**: Explosions are visible for 2 steps after they occur, showing the danger zone
+- **Collision**: You die if you're in the explosion radius when a meteor explodes
+- **No Permanent Obstacles**: Meteors explode and disappear - the board stays clear for navigation
 
 ## Running the code
 
@@ -150,6 +152,7 @@ train_any_agent(
 
 ### Game Details
 
+**Actions:**
 The game supports 5 actions:
 - `0`: UP
 - `1`: RIGHT
@@ -157,20 +160,33 @@ The game supports 5 actions:
 - `3`: LEFT
 - `4`: STAY (no movement)
 
+**Meteor Explosion Mechanics:**
+- Meteors spawn each step with a configurable probability (default: 0.1)
+- 40% of meteors target the player's current position (making evasion necessary)
+- Meteors show warnings 2 steps before landing:
+  - **2 steps away**: Orange warning at landing position
+  - **1 step away**: Red warning at landing position + explosion radius shown
+  - **Exploding**: Bright red explosion effect in 3×3 area
+- Explosion radius: 3×3 grid (center + 8 adjacent cells)
+- Explosion effect: Visible for 2 steps after explosion (fades from bright red to lighter red)
+- Meteors disappear after exploding (no permanent obstacles)
+
 The observation is a flattened grid (width × height) with values:
 - `2.0`: Player position
-- `1.5`: Object landing this step
-- `1.0`: Warning indicator (1 step before landing)
-- `0.5`: Warning indicator (2 steps before landing)
-- `-1.0`: Wall (landed object)
+- `1.5`: Meteor exploding this step (center of explosion)
+- `1.0`: Warning indicator (1 step before explosion) - also shows explosion radius (0.8)
+- `0.8`: Explosion danger zone (adjacent cells to meteor landing in 1 step)
+- `0.5`: Warning indicator (2 steps before explosion)
+- `-0.5 to -0.8`: Active explosion effect (fading over 2 steps after meteor explodes)
 - `0.0`: Empty cell
 
 Additional observation features (if enabled):
 - Danger signals: 3 values indicating danger in left, forward, and right directions relative to player's facing direction
 
 Rewards (these can be changed in `move-based-snake/training_options.py`):
-- `-10.0`: Collision (game over - hit by falling object, walked into wall, or hit boundary)
-- `0.1`: Survival reward per step
+- `-5.0`: Collision (game over - hit by meteor explosion or hit boundary)
+- `0.2`: Survival reward per step
+- `0.1`: Danger avoidance reward (for moving away from meteors)
 
 ## Solution
 The solution is implemented in `agents/solution_model.py`

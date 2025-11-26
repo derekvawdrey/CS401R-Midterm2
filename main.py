@@ -26,8 +26,10 @@ def play_player_mode(game: FallingObjectsGame, renderer: GameRenderer):
     print("  Space: Stay still (no movement)")
     print("  R: Reset game")
     print("  ESC or Close window: Quit")
-    print("\nAvoid falling objects! You get a 2-step warning before objects fall.")
-    print("Falling objects create walls that you cannot walk through.")
+    print("\nAvoid exploding meteors! You get a 2-step warning before meteors land.")
+    print("Meteors explode in a 3x3 radius (center + 8 adjacent cells).")
+    print("Explosions are visible for 2 steps - stay clear of the red zones!")
+    print("The board stays clear - meteors explode and disappear (no permanent walls).")
     
     running = True
     game_over = False
@@ -222,9 +224,9 @@ def main():
             agent = RandomAgent(game.action_space_size)
         elif args.dqn_model:
             try:
-                from agents.dqn_agent import FallingObjectsDQNAgent
+                from agents.dqn_agent import DQNAgent
                 print(f"Loading DQN agent from {args.dqn_model}")
-                agent = FallingObjectsDQNAgent(game, model_path=args.dqn_model)
+                agent = DQNAgent(game, model_path=args.dqn_model)
                 print("DQN agent loaded successfully!")
             except Exception as e:
                 print(f"Error loading DQN agent: {e}")
