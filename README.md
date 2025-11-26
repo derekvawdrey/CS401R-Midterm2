@@ -183,7 +183,7 @@ The observation is a flattened grid (width × height) with values:
 Additional observation features (if enabled):
 - Danger signals: 3 values indicating danger in left, forward, and right directions relative to player's facing direction
 
-Rewards (these can be changed in `move-based-snake/training_options.py`):
+Rewards (these can be changed in `meteor-game/training_options.py`):
 - `-5.0`: Collision (game over - hit by meteor explosion or hit boundary)
 - `0.2`: Survival reward per step
 - `0.1`: Danger avoidance reward (for moving away from meteors)

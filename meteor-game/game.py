@@ -15,7 +15,7 @@ try:
         STAY_SAFE_REWARD, UNNECESSARY_MOVEMENT_PENALTY, IMMEDIATE_DANGER_AVOIDANCE,
         NEAR_DANGER_AVOIDANCE, FAR_DANGER_AVOIDANCE, MULTI_DANGER_BONUS,
         MULTI_DANGER_THRESHOLD, SURVIVAL_DECAY_RATE, PATTERN_RECOGNITION_BONUS,
-        CENTER_POSITION_REWARD, CENTER_RADIUS
+        CENTER_POSITION_REWARD, CENTER_RADIUS, VIEW_RADIUS, BORDER_PENALTY, BORDER_PENALTY_DISTANCE
     )
 except ImportError:
     from player import Player
@@ -25,7 +25,7 @@ except ImportError:
         STAY_SAFE_REWARD, UNNECESSARY_MOVEMENT_PENALTY, IMMEDIATE_DANGER_AVOIDANCE,
         NEAR_DANGER_AVOIDANCE, FAR_DANGER_AVOIDANCE, MULTI_DANGER_BONUS,
         MULTI_DANGER_THRESHOLD, SURVIVAL_DECAY_RATE, PATTERN_RECOGNITION_BONUS,
-        CENTER_POSITION_REWARD, CENTER_RADIUS
+        CENTER_POSITION_REWARD, CENTER_RADIUS, VIEW_RADIUS, BORDER_PENALTY, BORDER_PENALTY_DISTANCE
     )
 
 class FallingObjectsGame:
@@ -56,7 +56,7 @@ class FallingObjectsGame:
     def __init__(self, grid_width: int = 20, grid_height: int = 20,
                  fall_probability: float = 0.1, warning_steps: int = 3,
                  enable_danger_signals: bool = None, wrap_boundaries: bool = False,
-                 player_target_probability: float = 0.5, view_radius: int = 4):
+                 player_target_probability: float = 0.5, view_radius: int = None):
         """
         Initialize the game.
         
@@ -69,7 +69,7 @@ class FallingObjectsGame:
                                   If None, uses ENABLE_DANGER_SIGNALS from training_options
             wrap_boundaries: Whether player wraps around boundaries (default: False)
             player_target_probability: Probability of spawning a bomb on player every 4 steps (default: 0.5)
-            view_radius: Radius of local view around player (default: 4, gives 9x9 window)
+            view_radius: Radius of local view around player. If None, uses VIEW_RADIUS from training_options (default: 4, gives 9x9 window)
         """
         self.grid_width = grid_width
         self.grid_height = grid_height
@@ -79,7 +79,7 @@ class FallingObjectsGame:
         self.player_target_probability = player_target_probability
         self.enable_danger_signals = enable_danger_signals if enable_danger_signals is not None else ENABLE_DANGER_SIGNALS
         self.wrap_boundaries = wrap_boundaries
-        self.view_radius = view_radius
+        self.view_radius = view_radius if view_radius is not None else VIEW_RADIUS
         
         self.player: Optional[Player] = None
         # Falling objects: list of (x, y, steps_until_fall)
@@ -445,6 +445,21 @@ class FallingObjectsGame:
             dist_from_center = abs(player_pos[0] - center_x) + abs(player_pos[1] - center_y)
             if dist_from_center <= CENTER_RADIUS:
                 reward += CENTER_POSITION_REWARD
+        
+        # 9. BORDER PENALTY (penalty for being near border rows/columns)
+        if BORDER_PENALTY < 0:
+            px, py = player_pos[0], player_pos[1]
+            # Check if player is within BORDER_PENALTY_DISTANCE cells of any border
+            # Distance from left border: px
+            # Distance from right border: (grid_width - 1) - px
+            # Distance from top border: py
+            # Distance from bottom border: (grid_height - 1) - py
+            near_border = (px < BORDER_PENALTY_DISTANCE or 
+                          px >= self.grid_width - BORDER_PENALTY_DISTANCE or
+                          py < BORDER_PENALTY_DISTANCE or 
+                          py >= self.grid_height - BORDER_PENALTY_DISTANCE)
+            if near_border:
+                reward += BORDER_PENALTY
         
         # Update previous state for next step
         self.prev_player_pos = player_pos

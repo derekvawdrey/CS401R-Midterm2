@@ -10,7 +10,7 @@ import os
 from typing import Optional
 
 # Add the move-based-snake directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'move-based-snake'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'meteor-game'))
 
 from game import FallingObjectsGame
 from renderer import GameRenderer
