@@ -8,7 +8,7 @@ Our goal is to train a RL model that will learn to play the game the best it can
 ## Game Mechanics
 
 - **Player**: You control a monster that can move in 4 directions (UP, RIGHT, DOWN, LEFT) or stay in place
-- **Meteors**: Meteors appear at random positions on the board (40% chance to target your current position)
+- **Meteors**: Meteors appear at random positions on the board (20% chance to target your current position)
 - **Warning System**: Meteors show a warning indicator at the landing position 2 steps before they explode
 - **Explosion System**: When meteors land, they explode in a 3×3 radius (center + 8 adjacent cells)
 - **Explosion Effect**: Explosions are visible for 2 steps after they occur, showing the danger zone
@@ -162,7 +162,7 @@ The game supports 5 actions:
 
 **Meteor Explosion Mechanics:**
 - Meteors spawn each step with a configurable probability (default: 0.1)
-- 40% of meteors target the player's current position (making evasion necessary)
+- 20% of meteors target the player's current position (making evasion necessary)
 - Meteors show warnings 2 steps before landing:
   - **2 steps away**: Orange warning at landing position
   - **1 step away**: Red warning at landing position + explosion radius shown

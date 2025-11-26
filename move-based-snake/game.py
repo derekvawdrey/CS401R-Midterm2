@@ -117,11 +117,11 @@ class FallingObjectsGame:
         """
         Spawn a new meteor warning every step. 
         
-        40% chance to target the player's current position (encourages evasion),
-        60% chance for random position.
+        20% chance to target the player's current position (encourages evasion),
+        80% chance for random position.
         """
-        # 40% chance to target the player's position, 60% chance for random position
-        target_player = random.random() < 0.4
+        # 20% chance to target the player's position, 80% chance for random position
+        target_player = random.random() < 0.2
         
         if target_player and self.player is not None:
             # Target the player's current position
