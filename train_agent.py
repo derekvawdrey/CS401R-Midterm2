@@ -47,12 +47,12 @@ def main():
                        help='Initial epsilon (default: 1.0)')
     parser.add_argument('--epsilon-min', type=float, default=0.01,
                        help='Minimum epsilon (default: 0.01)')
-    parser.add_argument('--epsilon-decay', type=float, default=0.995,
-                       help='Epsilon decay rate (default: 0.995)')
+    parser.add_argument('--epsilon-decay', type=float, default=0.9998,
+                       help='Epsilon decay rate (default: 0.995)')  
     parser.add_argument('--batch-size', type=int, default=64,
                        help='Batch size for training (default: 64)')
-    parser.add_argument('--memory-size', type=int, default=50000,
-                       help='Replay buffer size (default: 50000)')
+    parser.add_argument('--memory-size', type=int, default=20000,
+                       help='Replay buffer size (default: 20000)')
     parser.add_argument('--target-update-freq', type=int, default=100,
                        help='Frequency (in steps) to update target network (default: 100)')
     parser.add_argument('--max-steps', type=int, default=1000,

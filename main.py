@@ -109,8 +109,8 @@ def play_agent_mode(game: FallingObjectsGame, renderer: Optional[GameRenderer],
                 raise ValueError("Agent must have a predict(), act() method, or be callable")
             
             if debug and step_count < 10:
-                action_names = ['UP', 'RIGHT', 'DOWN', 'LEFT']
-                print(f"Step {step_count}: Action = {action} ({action_names[action] if 0 <= action < 4 else 'INVALID'})")
+                action_names = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'STAY']
+                print(f"Step {step_count}: Action = {action} ({action_names[action] if 0 <= action < len(action_names) else 'INVALID'})")
             
             state, reward, done, info = game.step(action)
             total_reward += reward
@@ -147,9 +147,13 @@ class RandomAgent:
     def __init__(self, action_space_size: int = 5):
         self.action_space_size = action_space_size
     
-    def predict(self, state):
+    def predict(self, state, debug: bool = False):
         import random
-        return random.randint(0, self.action_space_size - 1)
+        action = random.randint(0, self.action_space_size - 1)
+        if debug:
+            action_names = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'STAY']
+            print(f"RandomAgent: Selected action: {action} ({action_names[action] if 0 <= action < len(action_names) else 'INVALID'})")
+        return action
 
 
 def main():
@@ -205,8 +209,8 @@ def main():
             grid_width=args.width,
             grid_height=args.height,
             cell_size=30,
-            fps=10 if args.mode == 'player' else 60,
-            limit_fps=(args.mode == 'player'),
+            fps=10 if args.mode == 'player' else 10,
+            limit_fps=True,  # Cap FPS in agent mode when not training (main.py is for non-training)
             enable_sound_effects=(args.mode == 'player')
         )
     

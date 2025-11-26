@@ -114,14 +114,33 @@ def train_any_agent(
         
         # Print progress
         if verbose and (episode + 1) % 10 == 0:
-            avg_reward = sum(episode_rewards[-10:]) / 10
-            avg_length = sum(episode_lengths[-10:]) / 10
-            avg_score = sum(episode_scores[-10:]) / 10
-            loss_str = f" | Avg Loss: {sum([l for l in episode_losses[-10:] if l is not None]) / max(1, len([l for l in episode_losses[-10:] if l is not None])):.4f}" if any(l is not None for l in episode_losses[-10:]) else ""
+            # Use larger window (50 episodes) for smoother averages, but show last 10 for recent trend
+            window_size = min(50, len(episode_rewards))
+            recent_window = min(10, len(episode_rewards))
+            
+            avg_reward = sum(episode_rewards[-window_size:]) / window_size
+            avg_length = sum(episode_lengths[-window_size:]) / window_size
+            avg_score = sum(episode_scores[-window_size:]) / window_size
+            
+            # Calculate standard deviation to show variability
+            if window_size > 1:
+                std_reward = np.std(episode_rewards[-window_size:])
+                std_length = np.std(episode_lengths[-window_size:])
+            else:
+                std_reward = 0.0
+                std_length = 0.0
+            
+            loss_str = f" | Avg Loss: {sum([l for l in episode_losses[-recent_window:] if l is not None]) / max(1, len([l for l in episode_losses[-recent_window:] if l is not None])):.4f}" if any(l is not None for l in episode_losses[-recent_window:]) else ""
+            
+            # Get epsilon if agent has it (for DQN agents)
+            epsilon_str = ""
+            if hasattr(agent, 'epsilon'):
+                epsilon_str = f" | Epsilon: {agent.epsilon:.4f}"
+            
             print(f"Episode {episode + 1}/{num_episodes} | "
-                  f"Avg Reward: {avg_reward:.2f} | "
-                  f"Avg Length: {avg_length:.1f} | "
-                  f"Avg Score: {avg_score:.2f}{loss_str}")
+                  f"Avg Reward: {avg_reward:.2f} (±{std_reward:.2f}) | "
+                  f"Avg Length: {avg_length:.1f} (±{std_length:.1f}) | "
+                  f"Avg Score: {avg_score:.2f}{loss_str}{epsilon_str}")
         
         # Save model periodically (if agent supports it)
         if (episode + 1) % save_freq == 0:

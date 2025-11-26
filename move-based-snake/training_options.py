@@ -6,18 +6,72 @@ and toggle training features.
 All values are in float format.
 """
 
+# ============================================================================
+# BASIC REWARDS
+# ============================================================================
+
 # Reward for colliding with walls, boundaries, or being hit by falling objects (game over)
 # Reduced from -10.0 to make learning easier (agent needs to survive fewer steps to offset)
 COLLISION_REWARD = -5.0
 
 # Reward for surviving each step (small positive reward to encourage survival)
-# Increased to make survival more valuable relative to collision penalty
-SURVIVAL_REWARD = 0.2
+# Increased significantly to make survival more valuable - agent needs strong incentive to learn the 4-step pattern
+SURVIVAL_REWARD = 0.5
 
 # Reward for avoiding danger (being far from falling objects landing soon)
 # Positive value rewards moving away from danger
 # Increased to give stronger signal for evasive actions
-DANGER_AVOIDANCE_REWARD = 0.1
+DANGER_AVOIDANCE_REWARD = 0
+
+# ============================================================================
+# ALTERNATIVE REWARD STRATEGIES
+# ============================================================================
+
+# 1. DISTANCE-BASED REWARDS
+# Reward for maintaining safe distance from meteors
+# Set to 0 to disable, or use a small positive value (e.g., 0.1)
+DISTANCE_SAFETY_REWARD = 0.5  # Reward per step for being far from immediate dangers
+MIN_SAFE_DISTANCE = 3  # Minimum distance (Manhattan) to be considered "safe"
+
+# 2. PROGRESSIVE SURVIVAL REWARDS
+# Increase survival reward over time to encourage longer episodes
+# Set to 0 to disable, or use a small value (e.g., 0.001)
+PROGRESSIVE_SURVIVAL_BONUS = 0.0  # Additional reward per step = steps * this_value
+
+# 3. EFFICIENCY REWARDS
+# Reward for minimal movement (staying still when safe)
+# Set to 0 to disable, or use a small positive value (e.g., 0.05)
+STAY_SAFE_REWARD = 0.0  # Reward for STAY action when in a safe position
+UNNECESSARY_MOVEMENT_PENALTY = 0.0  # Small penalty for moving when safe to stay
+
+# 4. DANGER-LEVEL REWARDS
+# Different rewards based on how close danger is
+IMMEDIATE_DANGER_AVOIDANCE = 0.0  # Reward for avoiding meteors landing in 1 step
+NEAR_DANGER_AVOIDANCE = 0.0  # Reward for avoiding meteors landing in 2 steps
+FAR_DANGER_AVOIDANCE = 0.0  # Reward for avoiding meteors landing in 3+ steps
+
+# 5. MULTI-DANGER BONUS
+# Bonus for successfully navigating multiple simultaneous dangers
+MULTI_DANGER_BONUS = 0.0  # Bonus when avoiding 2+ meteors landing soon
+MULTI_DANGER_THRESHOLD = 2  # Number of meteors needed to trigger bonus
+
+# 6. TIME-BASED DECAY
+# Survival rewards decay over time to encourage faster learning early on
+# Set to 0 to disable, or use a small value (e.g., 0.0001)
+SURVIVAL_DECAY_RATE = 0.0  # Survival reward multiplier decreases by this per step
+
+# 7. PATTERN RECOGNITION REWARDS
+# Reward for recognizing and avoiding danger patterns
+PATTERN_RECOGNITION_BONUS = 0.0  # Bonus for avoiding player-targeted meteors (4-step pattern)
+
+# 8. CENTER_POSITION_REWARD
+# Reward for staying near center (encourages strategic positioning)
+CENTER_POSITION_REWARD = 0.0  # Reward for being near grid center
+CENTER_RADIUS = 5  # Distance from center to receive reward
+
+# ============================================================================
+# OBSERVATION SETTINGS
+# ============================================================================
 
 # Whether to include danger signals (left, forward, right) in the observation
 ENABLE_DANGER_SIGNALS = True

@@ -131,12 +131,13 @@ class DQNAgent(BaseAgent):
             return normalized
         return state
     
-    def predict(self, observation: np.ndarray) -> int:
+    def predict(self, observation: np.ndarray, debug: bool = False) -> int:
         """
         Predict the best action given an observation (no exploration).
         
         Args:
             observation: Current state observation
+            debug: If True, print Q-values for debugging
             
         Returns:
             Action to take
@@ -148,6 +149,12 @@ class DQNAgent(BaseAgent):
             state_tensor = torch.FloatTensor(normalized_obs).unsqueeze(0).to(self.device)
             q_values = self.dqn(state_tensor)
             action = q_values.argmax().item()
+            
+            if debug:
+                action_names = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'STAY']
+                q_vals = q_values.cpu().numpy()[0]
+                print(f"Q-values: {dict(zip(action_names, q_vals))}")
+                print(f"Selected action: {action} ({action_names[action] if 0 <= action < len(action_names) else 'INVALID'})")
         self.dqn.train()
         return action
     
