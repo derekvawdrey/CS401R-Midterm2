@@ -56,7 +56,7 @@ class FallingObjectsGame:
     def __init__(self, grid_width: int = 20, grid_height: int = 20,
                  fall_probability: float = 0.1, warning_steps: int = 3,
                  enable_danger_signals: bool = None, wrap_boundaries: bool = False,
-                 player_target_probability: float = 0.5):
+                 player_target_probability: float = 0.5, view_radius: int = 4):
         """
         Initialize the game.
         
@@ -69,6 +69,7 @@ class FallingObjectsGame:
                                   If None, uses ENABLE_DANGER_SIGNALS from training_options
             wrap_boundaries: Whether player wraps around boundaries (default: False)
             player_target_probability: Probability of spawning a bomb on player every 4 steps (default: 0.5)
+            view_radius: Radius of local view around player (default: 4, gives 9x9 window)
         """
         self.grid_width = grid_width
         self.grid_height = grid_height
@@ -78,6 +79,7 @@ class FallingObjectsGame:
         self.player_target_probability = player_target_probability
         self.enable_danger_signals = enable_danger_signals if enable_danger_signals is not None else ENABLE_DANGER_SIGNALS
         self.wrap_boundaries = wrap_boundaries
+        self.view_radius = view_radius
         
         self.player: Optional[Player] = None
         # Falling objects: list of (x, y, steps_until_fall)
@@ -131,6 +133,34 @@ class FallingObjectsGame:
         
         return self._get_observation()
     
+    def _is_position_in_danger(self, x: int, y: int) -> bool:
+        """
+        Check if a position is in danger (in explosion radius of falling or exploding bombs).
+        
+        Args:
+            x: X coordinate to check
+            y: Y coordinate to check
+            
+        Returns:
+            True if position is in danger zone, False otherwise
+        """
+        # Check if position is in active explosion
+        if (x, y) in self.active_explosions:
+            return True
+        
+        # Check if position is in explosion radius of any falling bomb
+        for fx, fy, steps_until_fall in self.falling_objects:
+            # Check explosion radius (3x3) for bombs that will explode soon
+            if steps_until_fall <= 1:  # Bomb will explode this step or next
+                for dx in [-1, 0, 1]:
+                    for dy in [-1, 0, 1]:
+                        explosion_x = fx + dx
+                        explosion_y = fy + dy
+                        if explosion_x == x and explosion_y == y:
+                            return True
+        
+        return False
+    
     def _spawn_falling_object(self):
         """
         Spawn a new meteor warning at a random position.
@@ -139,20 +169,22 @@ class FallingObjectsGame:
         x = random.randint(0, self.grid_width - 1)
         y = random.randint(0, self.grid_height - 1)
         
-        # Don't spawn on top of existing walls or other falling objects
+        # Don't spawn on top of existing walls, other falling objects, or active explosions
         occupied = self.walls.copy()
         occupied.update({(fx, fy) for fx, fy, _ in self.falling_objects})
+        # Also check active explosions (bombs currently exploding)
+        occupied.update(self.active_explosions.keys())
         
         # Try to find an empty position (with more attempts since we need one every step)
         attempts = 0
         max_attempts = 50  # More attempts since we must find a position
-        while (x, y) in occupied and attempts < max_attempts:
+        while ((x, y) in occupied or self._is_position_in_danger(x, y)) and attempts < max_attempts:
             x = random.randint(0, self.grid_width - 1)
             y = random.randint(0, self.grid_height - 1)
             attempts += 1
         
         # Add if we found a valid position (or if board is mostly full, add anyway)
-        if (x, y) not in occupied or attempts >= max_attempts:
+        if ((x, y) not in occupied and not self._is_position_in_danger(x, y)) or attempts >= max_attempts:
             # Add with warning_steps countdown (object will land at this position)
             self.falling_objects.append((x, y, self.warning_steps))
     
@@ -164,12 +196,14 @@ class FallingObjectsGame:
             player_pos = self.player.get_position()
             x, y = player_pos[0], player_pos[1]
             
-            # Don't spawn on top of existing walls or other falling objects
+            # Don't spawn on top of existing walls, other falling objects, or active explosions
             occupied = self.walls.copy()
             occupied.update({(fx, fy) for fx, fy, _ in self.falling_objects})
+            # Also check active explosions (bombs currently exploding)
+            occupied.update(self.active_explosions.keys())
             
-            # Only spawn if position is not already occupied
-            if (x, y) not in occupied:
+            # Only spawn if position is not already occupied and not in danger
+            if (x, y) not in occupied and not self._is_position_in_danger(x, y):
                 # Add with warning_steps countdown (object will land at this position)
                 self.falling_objects.append((x, y, self.warning_steps))
     
@@ -484,10 +518,10 @@ class FallingObjectsGame:
     
     def _get_observation(self) -> np.ndarray:
         """
-        Get current game state as an observation.
+        Get current game state as an observation (local view around player).
         
         Observation values:
-        - 2.0: Player position
+        - 2.0: Player position (center of local view)
         - 1.5: Meteor exploding this step (center)
         - 1.0: Meteor landing in 1 step (center)
         - 0.8: Explosion danger zone (adjacent to meteor landing in 1 step)
@@ -496,69 +530,82 @@ class FallingObjectsGame:
         - -0.5 to -0.8: Active explosion effect (fading)
         - 0.0: Empty cell
         
-        If danger signals enabled, also includes 3 values for danger in
-        left, forward, and right directions relative to player's facing.
+        Also includes:
+        - 1.0 or 0.0: in_danger flag (1.0 if player is currently in danger zone)
+        
+        If danger signals enabled, also includes 4 values for danger in
+        left, forward, right, and backward directions relative to player's facing.
         
         Returns:
-            Flattened observation array representing the game state
+            Flattened observation array representing the local view around player
         """
-        # Create a grid representation
-        grid = np.zeros((self.grid_height, self.grid_width), dtype=np.float32)
+        if self.player is None:
+            # Return empty observation if no player
+            view_size = (2 * self.view_radius + 1) ** 2
+            return np.zeros(view_size + 1 + (4 if self.enable_danger_signals else 0), dtype=np.float32)
         
-        if self.player is not None:
-            # Player = 2.0
-            pos = self.player.get_position()
-            if 0 <= pos[0] < self.grid_width and 0 <= pos[1] < self.grid_height:
-                grid[pos[1], pos[0]] = 2.0
+        player_pos = self.player.get_position()
+        px, py = player_pos[0], player_pos[1]
         
-        # Meteors (no walls anymore - meteors explode and disappear):
-        # - Warning (3 steps away) = 0.3 at landing position
-        # - Warning (2 steps away) = 0.5 at landing position
-        # - Warning (1 step away) = 1.0 at landing position  
-        # - Landing/exploding this step = 1.5 at landing position
-        # - Explosion radius (adjacent cells) = 0.8 to show danger zone
+        # Create local view grid (view_radius cells in each direction)
+        view_size = 2 * self.view_radius + 1
+        local_view = np.zeros((view_size, view_size), dtype=np.float32)
+        
+        # Process all falling objects and their explosion radii
         for x, y, steps_until_fall in self.falling_objects:
-            if 0 <= x < self.grid_width and 0 <= y < self.grid_height:
+            # Check if meteor center is in local view
+            local_x = x - px + self.view_radius
+            local_y = y - py + self.view_radius
+            if 0 <= local_x < view_size and 0 <= local_y < view_size:
                 if steps_until_fall >= 3:
-                    # 3+ steps warning - show at landing position (early warning)
-                    grid[y, x] = max(grid[y, x], 0.3)
+                    local_view[local_y, local_x] = max(local_view[local_y, local_x], 0.3)
                 elif steps_until_fall == 2:
-                    # 2 steps warning - show at landing position
-                    grid[y, x] = max(grid[y, x], 0.5)
+                    local_view[local_y, local_x] = max(local_view[local_y, local_x], 0.5)
                 elif steps_until_fall == 1:
-                    # 1 step warning - show at landing position and explosion radius
-                    grid[y, x] = max(grid[y, x], 1.0)
-                    # Show explosion radius (adjacent cells)
-                    for dx in [-1, 0, 1]:
-                        for dy in [-1, 0, 1]:
-                            if dx == 0 and dy == 0:
-                                continue
-                            exp_x, exp_y = x + dx, y + dy
-                            if 0 <= exp_x < self.grid_width and 0 <= exp_y < self.grid_height:
-                                grid[exp_y, exp_x] = max(grid[exp_y, exp_x], 0.8)
-                else:
-                    # Landing/exploding this step - show explosion radius
-                    grid[y, x] = max(grid[y, x], 1.5)
-                    # Show explosion radius (adjacent cells)
-                    for dx in [-1, 0, 1]:
-                        for dy in [-1, 0, 1]:
-                            if dx == 0 and dy == 0:
-                                continue
-                            exp_x, exp_y = x + dx, y + dy
-                            if 0 <= exp_x < self.grid_width and 0 <= exp_y < self.grid_height:
-                                grid[exp_y, exp_x] = max(grid[exp_y, exp_x], 0.8)
+                    local_view[local_y, local_x] = max(local_view[local_y, local_x], 1.0)
+                else:  # steps_until_fall == 0, exploding this step
+                    local_view[local_y, local_x] = max(local_view[local_y, local_x], 1.5)
+            
+            # Show explosion radius for meteors that will explode soon (within 1 step)
+            if steps_until_fall <= 1:
+                for dx in [-1, 0, 1]:
+                    for dy in [-1, 0, 1]:
+                        if dx == 0 and dy == 0:
+                            continue
+                        exp_x, exp_y = x + dx, y + dy
+                        # Convert to local coordinates
+                        local_exp_x = exp_x - px + self.view_radius
+                        local_exp_y = exp_y - py + self.view_radius
+                        # Check if in bounds of local view and global grid
+                        if (0 <= local_exp_x < view_size and 0 <= local_exp_y < view_size and
+                            0 <= exp_x < self.grid_width and 0 <= exp_y < self.grid_height):
+                            local_view[local_exp_y, local_exp_x] = max(local_view[local_exp_y, local_exp_x], 0.8)
         
-        # Show active explosions (bomb effect)
-        # Use -0.5 to -0.8 to show explosion effect (negative values for visual distinction)
+        # Process active explosions
         for (exp_x, exp_y), duration in self.active_explosions.items():
-            if 0 <= exp_x < self.grid_width and 0 <= exp_y < self.grid_height:
-                # Intensity decreases as explosion fades (2 -> 1 -> 0)
-                # Use negative values to distinguish from meteors
-                intensity = -0.5 - (0.3 * (1 - duration / self.explosion_duration))
-                grid[exp_y, exp_x] = min(grid[exp_y, exp_x], intensity)  # Use min to ensure explosion shows
+            # Convert to local coordinates
+            local_x = exp_x - px + self.view_radius
+            local_y = exp_y - py + self.view_radius
+            # Check if in bounds of local view
+            if 0 <= local_x < view_size and 0 <= local_y < view_size:
+                # Don't overwrite player position
+                if not (local_x == self.view_radius and local_y == self.view_radius):
+                    intensity = -0.5 - (0.3 * (1 - duration / self.explosion_duration))
+                    local_view[local_y, local_x] = min(local_view[local_y, local_x], intensity)
         
-        grid_flat = grid.flatten()
+        # Mark player position last (center of view) so it's always visible
+        local_view[self.view_radius, self.view_radius] = 2.0
+        
+        grid_flat = local_view.flatten()
         observation_parts = [grid_flat]
+        
+        # Add in_danger flag for player's current position
+        in_danger = 0.0
+        if self.player is not None:
+            player_pos = self.player.get_position()
+            if self._is_position_in_danger(player_pos[0], player_pos[1]):
+                in_danger = 1.0
+        observation_parts.append(np.array([in_danger], dtype=np.float32))
         
         # Get danger signals (left, forward, right, backward) if enabled
         if self.enable_danger_signals:

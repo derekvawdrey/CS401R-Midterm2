@@ -21,7 +21,7 @@ SURVIVAL_REWARD = 0.5
 # Reward for avoiding danger (being far from falling objects landing soon)
 # Positive value rewards moving away from danger
 # Increased to give stronger signal for evasive actions
-DANGER_AVOIDANCE_REWARD = 0
+DANGER_AVOIDANCE_REWARD = 0.0
 
 # ============================================================================
 # ALTERNATIVE REWARD STRATEGIES
@@ -30,13 +30,13 @@ DANGER_AVOIDANCE_REWARD = 0
 # 1. DISTANCE-BASED REWARDS
 # Reward for maintaining safe distance from meteors
 # Set to 0 to disable, or use a small positive value (e.g., 0.1)
-DISTANCE_SAFETY_REWARD = 0.5  # Reward per step for being far from immediate dangers
+DISTANCE_SAFETY_REWARD = 0.0  # Reward per step for being far from immediate dangers
 MIN_SAFE_DISTANCE = 3  # Minimum distance (Manhattan) to be considered "safe"
 
 # 2. PROGRESSIVE SURVIVAL REWARDS
 # Increase survival reward over time to encourage longer episodes
 # Set to 0 to disable, or use a small value (e.g., 0.001)
-PROGRESSIVE_SURVIVAL_BONUS = 0.0  # Additional reward per step = steps * this_value
+PROGRESSIVE_SURVIVAL_BONUS = 0.001  # Additional reward per step = steps * this_value
 
 # 3. EFFICIENCY REWARDS
 # Reward for minimal movement (staying still when safe)
@@ -66,8 +66,8 @@ PATTERN_RECOGNITION_BONUS = 0.0  # Bonus for avoiding player-targeted meteors (4
 
 # 8. CENTER_POSITION_REWARD
 # Reward for staying near center (encourages strategic positioning)
-CENTER_POSITION_REWARD = 0.0  # Reward for being near grid center
-CENTER_RADIUS = 5  # Distance from center to receive reward
+CENTER_POSITION_REWARD = 0.5  # Reward for being near grid center
+CENTER_RADIUS = 10  # Distance from center to receive reward
 
 # ============================================================================
 # OBSERVATION SETTINGS

@@ -163,8 +163,8 @@ The game supports 5 actions:
 **Meteor Explosion Mechanics:**
 - Meteors spawn each step with a configurable probability (default: 0.1)
 - 20% of meteors target the player's current position (making evasion necessary)
-- Meteors show warnings 2 steps before landing:
-  - **2 steps away**: Orange warning at landing position
+- Meteors show warnings 3 steps before landing:
+  - **2 and 3 steps away**: Orange warning at landing position
   - **1 step away**: Red warning at landing position + explosion radius shown
   - **Exploding**: Bright red explosion effect in 3×3 area
 - Explosion radius: 3×3 grid (center + 8 adjacent cells)
