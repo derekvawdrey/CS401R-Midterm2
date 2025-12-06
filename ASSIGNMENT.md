@@ -70,7 +70,3 @@ python main.py --mode agent --dqn-model ./pretrained-models/agent_3.pth
 ```
 
 ### Question 2: Does the agent perform how you thought it would?
-
-## Section 4:
-
-
