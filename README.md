@@ -15,6 +15,8 @@ Our goal is to train a RL model that will learn to play the game the best it can
 - **Collision**: You die if you're in the explosion radius when a meteor explodes
 - **No Permanent Obstacles**: Meteors explode and disappear - the board stays clear for navigation
 
+Meteors will fall from the sky as you move around the board. The goal is to avoid any meteors. Meteors are colored squares that get darker as they get closer to exploding.
+
 ## Running the code
     
 ### Installation

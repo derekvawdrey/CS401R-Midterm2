@@ -1,6 +1,6 @@
 # Assignment instructions
 
-This assignment will be less about coding the solution, and more about understanding rewarding of a bot. Your job is to learn how to structure the rewards in order to enable the DQN network to learn how to play the game properly, and how to survive as long as possible. An optional part of this assignment will be training your own model, but the primary part is observing how specific agents learned based on the rewards given.
+This assignment will be less about coding the solution, and more about understanding rewarding of a bot. Your job is to learn how to structure the rewards in order to enable the DQN (Deep Q-Network) to learn how to play the game properly (the type of game will be discussed in Section 0), and how to survive as long as possible. An optional part of this assignment will be training your own model, but the primary part is observing how specific agents learned based on the rewards given.
 
 All the agents were trained on 3000 steps on a grid size 20x20.
 

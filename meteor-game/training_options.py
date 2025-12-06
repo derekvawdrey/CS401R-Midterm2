@@ -68,13 +68,13 @@ PATTERN_RECOGNITION_BONUS = 0.0  # Bonus for avoiding player-targeted meteors (4
 
 # 8. CENTER_POSITION_REWARD
 # Reward for staying near center (encourages strategic positioning)
-CENTER_POSITION_REWARD = 0.5  # Reward for being near grid center
+CENTER_POSITION_REWARD = 0  # Reward for being near grid center
 CENTER_RADIUS = 5  # Distance from center to receive reward
 
 # 9. BORDER_PENALTY
 # Penalty for being near the border rows/columns
 # This discourages the agent from staying near the edges of the map
-BORDER_PENALTY = -1  # Penalty per step for being near border (negative value applies penalty, set to 0 to disable)
+BORDER_PENALTY = 0.0  # Penalty per step for being near border (negative value applies penalty, set to 0 to disable)
 BORDER_PENALTY_DISTANCE = 1  # Number of cells away from border to apply penalty (1 = only on border, 2 = border + 1 cell in, etc.)
 
 # ============================================================================
@@ -84,10 +84,10 @@ BORDER_PENALTY_DISTANCE = 1  # Number of cells away from border to apply penalty
 # Whether to include danger signals (left, forward, right) in the observation
 ENABLE_DANGER_SIGNALS = True
 
-# Whether to include position information (x, y, distance to center, distance to border)
+# Whether to include global position information (x, y, distance to center, distance to border)
 # This is crucial for border avoidance and center positioning rewards to work!
 # Set to False to demonstrate the importance of providing position information to the agent
-ENABLE_POSITION_INFO = True
+ENABLE_POSITION_INFO = False
 
 # Radius of local view around player sent to the agent
 # This determines the size of the observation window (view_radius cells in each direction)
