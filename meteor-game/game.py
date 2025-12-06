@@ -15,7 +15,8 @@ try:
         STAY_SAFE_REWARD, UNNECESSARY_MOVEMENT_PENALTY, IMMEDIATE_DANGER_AVOIDANCE,
         NEAR_DANGER_AVOIDANCE, FAR_DANGER_AVOIDANCE, MULTI_DANGER_BONUS,
         MULTI_DANGER_THRESHOLD, SURVIVAL_DECAY_RATE, PATTERN_RECOGNITION_BONUS,
-        CENTER_POSITION_REWARD, CENTER_RADIUS, VIEW_RADIUS, BORDER_PENALTY, BORDER_PENALTY_DISTANCE
+        CENTER_POSITION_REWARD, CENTER_RADIUS, VIEW_RADIUS, BORDER_PENALTY, BORDER_PENALTY_DISTANCE,
+        ENABLE_POSITION_INFO
     )
 except ImportError:
     from player import Player
@@ -25,7 +26,8 @@ except ImportError:
         STAY_SAFE_REWARD, UNNECESSARY_MOVEMENT_PENALTY, IMMEDIATE_DANGER_AVOIDANCE,
         NEAR_DANGER_AVOIDANCE, FAR_DANGER_AVOIDANCE, MULTI_DANGER_BONUS,
         MULTI_DANGER_THRESHOLD, SURVIVAL_DECAY_RATE, PATTERN_RECOGNITION_BONUS,
-        CENTER_POSITION_REWARD, CENTER_RADIUS, VIEW_RADIUS, BORDER_PENALTY, BORDER_PENALTY_DISTANCE
+        CENTER_POSITION_REWARD, CENTER_RADIUS, VIEW_RADIUS, BORDER_PENALTY, BORDER_PENALTY_DISTANCE,
+        ENABLE_POSITION_INFO
     )
 
 class FallingObjectsGame:
@@ -258,7 +260,7 @@ class FallingObjectsGame:
         
         # Update falling objects
         # Every 4 steps, there's a chance to spawn a bomb on the player
-        if self.steps % 4 == 0:
+        if self.steps % 8 == 0:
             if random.random() < self.player_target_probability:
                 self._spawn_on_player()
         
@@ -547,6 +549,11 @@ class FallingObjectsGame:
         
         Also includes:
         - 1.0 or 0.0: in_danger flag (1.0 if player is currently in danger zone)
+        - Position information (4 values, if ENABLE_POSITION_INFO is True):
+          * Normalized x position (0.0 to 1.0)
+          * Normalized y position (0.0 to 1.0)
+          * Distance to center (0.0 = center, 1.0 = far from center)
+          * Distance to nearest border (0.0 = on border, 1.0 = center)
         
         If danger signals enabled, also includes 4 values for danger in
         left, forward, right, and backward directions relative to player's facing.
@@ -557,7 +564,9 @@ class FallingObjectsGame:
         if self.player is None:
             # Return empty observation if no player
             view_size = (2 * self.view_radius + 1) ** 2
-            return np.zeros(view_size + 1 + (4 if self.enable_danger_signals else 0), dtype=np.float32)
+            # Size: local_view + in_danger + position_info (4 values if enabled) + danger_signals (4 if enabled)
+            position_info_size = 4 if ENABLE_POSITION_INFO else 0
+            return np.zeros(view_size + 1 + position_info_size + (4 if self.enable_danger_signals else 0), dtype=np.float32)
         
         player_pos = self.player.get_position()
         px, py = player_pos[0], player_pos[1]
@@ -621,6 +630,38 @@ class FallingObjectsGame:
             if self._is_position_in_danger(player_pos[0], player_pos[1]):
                 in_danger = 1.0
         observation_parts.append(np.array([in_danger], dtype=np.float32))
+        
+        # Add position information so agent knows where it is on the map
+        # This is crucial for border avoidance and center positioning rewards
+        if ENABLE_POSITION_INFO and self.player is not None:
+            px, py = player_pos[0], player_pos[1]
+            # Normalized position (0.0 to 1.0)
+            norm_x = px / max(1, self.grid_width - 1)
+            norm_y = py / max(1, self.grid_height - 1)
+            
+            # Distance to center (normalized, 0.0 = center, 1.0 = corner)
+            center_x, center_y = self.grid_width // 2, self.grid_height // 2
+            dist_to_center_x = abs(px - center_x) / max(1, center_x)
+            dist_to_center_y = abs(py - center_y) / max(1, center_y)
+            dist_to_center = (dist_to_center_x + dist_to_center_y) / 2.0
+            
+            # Distance to nearest border (normalized, 0.0 = on border, 1.0 = center)
+            dist_to_left = px
+            dist_to_right = (self.grid_width - 1) - px
+            dist_to_top = py
+            dist_to_bottom = (self.grid_height - 1) - py
+            min_border_dist = min(dist_to_left, dist_to_right, dist_to_top, dist_to_bottom)
+            # Normalize: 0.0 = on border, 1.0 = at center (or further)
+            max_possible_dist = max(center_x, center_y)
+            norm_border_dist = min_border_dist / max(1, max_possible_dist)
+            
+            position_info = np.array([
+                norm_x,           # Normalized x position
+                norm_y,           # Normalized y position
+                dist_to_center,   # Distance to center (0.0 = center, 1.0 = far)
+                norm_border_dist  # Distance to nearest border (0.0 = on border, 1.0 = center)
+            ], dtype=np.float32)
+            observation_parts.append(position_info)
         
         # Get danger signals (left, forward, right, backward) if enabled
         if self.enable_danger_signals:

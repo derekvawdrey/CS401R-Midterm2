@@ -39,8 +39,11 @@ class GameRenderer:
         # Initialize pygame and mixer for sound
         pygame.init()
         pygame.mixer.init()
-        self.screen = pygame.display.set_mode((self.window_width, self.window_height))
+        # Use RESIZABLE flag to ensure proper window handling on macOS
+        self.screen = pygame.display.set_mode((self.window_width, self.window_height), pygame.RESIZABLE)
         pygame.display.set_caption("Falling Objects Game")
+        # Ensure window can receive keyboard input
+        pygame.key.set_repeat(200, 50)  # Enable key repeat: 200ms delay, 50ms interval
         self.clock = pygame.time.Clock()
         
         # Sound effects
@@ -193,6 +196,9 @@ class GameRenderer:
             info: Optional info dictionary from game.step()
             skip_sound_check: If True, skip sound checking for faster rendering
         """
+        # Pump events to keep window responsive (especially important on macOS)
+        pygame.event.pump()
+        
         if not skip_sound_check:
             self._check_and_play_sounds(state_dict, info)
         
@@ -264,7 +270,12 @@ class GameRenderer:
         Returns:
             Action code (0-4) or None if no action
         """
-        for event in pygame.event.get():
+        # Process all pending events - this is critical for macOS window responsiveness
+        # pygame.event.get() internally calls pump() and removes events from queue
+        # We must call this frequently to catch window close button clicks
+        events = pygame.event.get()
+        
+        for event in events:
             if event.type == pygame.QUIT:
                 return 'quit'
             elif event.type == pygame.KEYDOWN:
@@ -280,6 +291,15 @@ class GameRenderer:
                     return 4  # STAY
                 elif event.key == pygame.K_r:
                     return 'reset'
+                elif event.key == pygame.K_ESCAPE:
+                    return 'quit'
+            # Handle window activation on macOS
+            elif event.type == pygame.ACTIVEEVENT:
+                # Window gained focus - ensure it's responsive
+                if event.gain:
+                    # Process any pending events when window gains focus
+                    pygame.event.pump()
+        
         return None
     
     def render_game_over(self, score: int, steps: int):
@@ -290,6 +310,9 @@ class GameRenderer:
             score: Final score
             steps: Number of steps taken
         """
+        # Pump events to keep window responsive (especially important on macOS)
+        pygame.event.pump()
+        
         state_dict = {'done': True}
         self._check_and_play_sounds(state_dict)
         

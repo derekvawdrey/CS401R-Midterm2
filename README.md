@@ -16,7 +16,7 @@ Our goal is to train a RL model that will learn to play the game the best it can
 - **No Permanent Obstacles**: Meteors explode and disappear - the board stays clear for navigation
 
 ## Running the code
-
+    
 ### Installation
 
 Install the required dependencies:

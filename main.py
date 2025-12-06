@@ -18,6 +18,8 @@ from renderer import GameRenderer
 
 def play_player_mode(game: FallingObjectsGame, renderer: GameRenderer):
     """Run the game in player mode (keyboard controls)."""
+    import time
+    
     state = game.reset()
     renderer.reset_state_tracking()
     
@@ -35,6 +37,9 @@ def play_player_mode(game: FallingObjectsGame, renderer: GameRenderer):
     game_over = False
     
     while running:
+        # Always process events FIRST to keep window responsive
+        # This must be called frequently to handle window close button and focus events
+        # On macOS, the close button requires frequent event processing
         action = renderer.handle_events()
         
         if action == 'quit':
@@ -63,12 +68,18 @@ def play_player_mode(game: FallingObjectsGame, renderer: GameRenderer):
                     if info.get('steps', 0) % 50 == 0:
                         print(f"Steps: {info['steps']}, Walls: {info.get('walls_count', 0)}")
             else:
+                # Render even when no action to keep window responsive
                 renderer.render(game.get_state_dict())
         else:
+            # Process events even in game over state
             renderer.render_game_over(
                 score=game.score,
                 steps=game.steps
             )
+        
+        # Always tick the clock to maintain consistent frame rate and keep window responsive
+        # This ensures events are processed regularly (60 FPS = events checked 60 times per second)
+        renderer.clock.tick(60)
 
 
 def play_agent_mode(game: FallingObjectsGame, renderer: Optional[GameRenderer], 
@@ -99,6 +110,17 @@ def play_agent_mode(game: FallingObjectsGame, renderer: Optional[GameRenderer],
             renderer.render(game.get_state_dict())
         
         while not game.done and step_count < max_steps:
+            # Always check for quit events to keep window responsive (critical for macOS)
+            if render and renderer:
+                render_event = renderer.handle_events()
+                if render_event == 'quit':
+                    return {
+                        'total_reward': total_reward,
+                        'steps': step_count,
+                        'score': game.score,
+                        'episode': episode_count
+                    }
+            
             if hasattr(agent, 'predict'):
                 action = agent.predict(state, debug=(debug and step_count < 10))
             elif hasattr(agent, 'act'):
@@ -117,17 +139,10 @@ def play_agent_mode(game: FallingObjectsGame, renderer: Optional[GameRenderer],
             step_count += 1
             
             if render and renderer:
-                if step_count % 100 == 0:
-                    render_event = renderer.handle_events()
-                    if render_event == 'quit':
-                        return {
-                            'total_reward': total_reward,
-                            'steps': step_count,
-                            'score': game.score,
-                            'episode': episode_count
-                        }
                 skip_sound = (step_count % 10 != 0)
                 renderer.render(game.get_state_dict(), info, skip_sound_check=skip_sound)
+                # Tick clock to maintain frame rate and keep window responsive
+                renderer.clock.tick(60)
         
         episode_count += 1
         result = {
