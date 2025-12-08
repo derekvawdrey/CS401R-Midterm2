@@ -54,4 +54,4 @@ Or any other number of things.
 
 Very subjective, no real answer
 
-At the end of this, you should have a general idea of what is important to give an agent, and why rewarding and phrasing the problem is important
+At the end of this, you should have a general idea of what is important to give an agent, and why rewarding/phrasing the problem is important.
