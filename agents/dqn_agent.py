@@ -233,31 +233,23 @@ class DQNAgent(BaseAgent):
         
         # Next Q-values using target network
         with torch.no_grad():
-            # Use main network to select best action (Double DQN)
             next_actions = self.dqn(next_states).argmax(1)
-            # Use target network to evaluate that action
             next_q_values = self.target_dqn(next_states).gather(1, next_actions.unsqueeze(1)).squeeze(1)
-            # Set Q-value to 0 for terminal states
             next_q_values[dones] = 0.0
         
-        # Compute target Q-values
+
         target_q_values = rewards + (self.gamma * next_q_values)
-        
-        # Clip rewards to prevent exploding Q-values (helps with stability)
-        # Rewards are typically in range [-10, 0.1], so clipping to [-10, 1] is safe
+
         target_q_values = torch.clamp(target_q_values, min=-20.0, max=10.0)
-        
-        # Compute loss (using Huber loss for more robust training)
+
         loss = nn.SmoothL1Loss()(current_q_values, target_q_values)
-        
-        # Optimize
+
         self.optimizer.zero_grad()
         loss.backward()
-        # Gradient clipping for stability
+
         torch.nn.utils.clip_grad_norm_(self.dqn.parameters(), max_norm=1.0)
         self.optimizer.step()
         
-        # Update target network periodically
         self.train_step_count += 1
         if self.train_step_count % self.target_update_freq == 0:
             self.target_dqn.load_state_dict(self.dqn.state_dict())
