@@ -28,7 +28,6 @@ class DQNModel(nn.Module):
         if hidden_sizes is None:
             hidden_sizes = [128, 128]
         
-        # Build the network layers
         layers = []
         input_size = state_size
         
@@ -37,12 +36,9 @@ class DQNModel(nn.Module):
             layers.append(nn.ReLU())
             input_size = hidden_size
         
-        # Output layer (Q-values for each action)
         layers.append(nn.Linear(input_size, action_size))
         
         self.network = nn.Sequential(*layers)
-        
-        # Initialize weights using Xavier uniform for better training
         self._initialize_weights()
     
     def _initialize_weights(self):
