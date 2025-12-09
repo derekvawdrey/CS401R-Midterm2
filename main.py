@@ -226,7 +226,7 @@ def main():
             cell_size=30,
             fps=10 if args.mode == 'player' else 10,
             limit_fps=True,  # Cap FPS in agent mode when not training (main.py is for non-training)
-            enable_sound_effects=(args.mode == 'player')
+            enable_sound_effects=False
         )
     
     # Run game
