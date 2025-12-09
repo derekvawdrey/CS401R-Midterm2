@@ -13,7 +13,7 @@ class GameRenderer:
     
     def __init__(self, grid_width: int, grid_height: int, 
                  cell_size: int = 30, fps: int = 10, limit_fps: bool = True,
-                 enable_sound_effects: bool = True):
+                 enable_sound_effects: bool = False):
         """
         Initialize the renderer.
         
@@ -38,7 +38,8 @@ class GameRenderer:
         
         # Initialize pygame and mixer for sound
         pygame.init()
-        pygame.mixer.init()
+        if enable_sound_effects:
+            pygame.mixer.init()
         # Use RESIZABLE flag to ensure proper window handling on macOS
         self.screen = pygame.display.set_mode((self.window_width, self.window_height), pygame.RESIZABLE)
         pygame.display.set_caption("Falling Objects Game")
